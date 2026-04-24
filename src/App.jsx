@@ -1,0 +1,519 @@
+import { DiscordSDK } from '@discord/embedded-app-sdk';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { supabase } from './lib/supabase';
+
+// ─── Constantes ───────────────────────────────────────────────────────────────
+const RANKS      = ['E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS', 'Z'];
+const RANK_RATIO = Object.fromEntries(RANKS.map((r, i) => [r, (i + 1) / RANKS.length]));
+
+const NEN_COLORS = {
+  Inconnu: '#888', Renforceur: '#e85d04', Émetteur: '#4cc9f0',
+  Transformateur: '#7b2fff', Manipulateur: '#2dc653', Matérialisateur: '#f72585', Spécialiste: '#ffd60a',
+};
+
+const NEN_TYPES = ['Inconnu', 'Renforceur', 'Émetteur', 'Transformateur', 'Manipulateur', 'Matérialisateur', 'Spécialiste'];
+
+const HATSU_BRANCHES = [
+  { key: 'renforcement',    label: 'Renf.',  nenType: 'Renforceur' },
+  { key: 'transformation',  label: 'Trans.', nenType: 'Transformateur' },
+  { key: 'materialisation', label: 'Matér.', nenType: 'Matérialiseur' },
+  { key: 'specialisation',  label: 'Spéc.',  nenType: 'Spécialiste' },
+  { key: 'manipulation',    label: 'Manip.', nenType: 'Manipulateur' },
+  { key: 'emission',        label: 'Émiss.', nenType: 'Émetteur' },
+];
+
+const NEN_ABILITY_LIST = [
+  { key: 'ten',   label: 'Ten'   },
+  { key: 'ren',   label: 'Ren'   },
+  { key: 'zetsu', label: 'Zetsu' },
+  { key: 'in_',   label: 'In'    },
+  { key: 'en',    label: 'En'    },
+  { key: 'ken',   label: 'Ken'   },
+  { key: 'gyo',   label: 'Gyo'   },
+];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const proxyImg = (url) => (url && url.trim()) ? `/api/image?url=${encodeURIComponent(url.trim())}` : '';
+
+async function fetchProfile(discordId) {
+  const { data, error } = await supabase
+    .from('players')
+    .select('*, stats(*), techniques(*), nen_abilities(*), hatsu_affinities(*)')
+    .eq('discord_id', discordId)
+    .single();
+  if (error) throw new Error(error.message);
+  return {
+    ...data,
+    stats:            Array.isArray(data.stats)            ? data.stats[0]            ?? {} : data.stats            ?? {},
+    nen_abilities:    Array.isArray(data.nen_abilities)    ? data.nen_abilities[0]    ?? {} : data.nen_abilities    ?? {},
+    hatsu_affinities: Array.isArray(data.hatsu_affinities) ? data.hatsu_affinities[0] ?? {} : data.hatsu_affinities ?? {},
+    techniques:       Array.isArray(data.techniques)       ? data.techniques               : [],
+  };
+}
+
+// ─── Radar Chart ──────────────────────────────────────────────────────────────
+function RadarChart({ labels, values, max = 100, color, title }) {
+  const size = 180, cx = 90, cy = 90, r = 70, n = labels.length, levels = 5;
+  const angle    = useCallback((i) => (Math.PI * 2 * i) / n - Math.PI / 2, [n]);
+  const gridPolygons = useMemo(() =>
+    Array.from({ length: levels }).map((_, lvl) =>
+      Array.from({ length: n }).map((_, i) => {
+        const ratio = (lvl + 1) / levels;
+        return `${cx + r * ratio * Math.cos(angle(i))},${cy + r * ratio * Math.sin(angle(i))}`;
+      }).join(' ')
+    ), [n, angle]);
+  const dataPoints = useMemo(() =>
+    values.map((v, i) => {
+      const ratio = Math.min(v, max) / max;
+      return { x: cx + r * ratio * Math.cos(angle(i)), y: cy + r * ratio * Math.sin(angle(i)) };
+    }), [values, max, angle]);
+  const polygon = dataPoints.map(p => `${p.x},${p.y}`).join(' ');
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+      <span style={{ fontFamily: "'Cinzel', serif", fontSize: 11, color, letterSpacing: 2, textTransform: 'uppercase', opacity: 0.9 }}>{title}</span>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        {gridPolygons.map((pts, lvl) => <polygon key={lvl} points={pts} fill="none" stroke={color} strokeOpacity={0.12} strokeWidth={1} />)}
+        {Array.from({ length: n }).map((_, i) => (
+          <line key={i} x1={cx} y1={cy} x2={cx + r * Math.cos(angle(i))} y2={cy + r * Math.sin(angle(i))} stroke={color} strokeOpacity={0.2} strokeWidth={1} />
+        ))}
+        <polygon points={polygon} fill={color} fillOpacity={0.18} stroke={color} strokeWidth={2} strokeOpacity={0.9} />
+        {dataPoints.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={3} fill={color} />)}
+        {Array.from({ length: n }).map((_, i) => {
+          const lx = cx + (r + 18) * Math.cos(angle(i)), ly = cy + (r + 18) * Math.sin(angle(i));
+          return <text key={i} x={lx} y={ly} textAnchor="middle" dominantBaseline="middle" fontSize={9} fill="#e0d5c5" fontFamily="'Cinzel', serif" opacity={0.8}>{labels[i]}</text>;
+        })}
+      </svg>
+    </div>
+  );
+}
+
+// ─── HatsuStar ────────────────────────────────────────────────────────────────
+function HatsuStar({ hatsu, nenType }) {
+  const size = 220, cx = 110, cy = 110, r = 76, n = 6, levels = RANKS.length;
+  const angle = useCallback((i) => (Math.PI * 2 * i) / n - Math.PI / 2, []);
+  const dataPoints = useMemo(() =>
+    HATSU_BRANCHES.map((b, i) => {
+      const ratio = RANK_RATIO[hatsu?.[b.key] || 'E'] ?? (1 / RANKS.length);
+      return { x: cx + r * ratio * Math.cos(angle(i)), y: cy + r * ratio * Math.sin(angle(i)) };
+    }), [hatsu, angle]);
+  const polygon    = dataPoints.map(p => `${p.x},${p.y}`).join(' ');
+  const activeIdx  = HATSU_BRANCHES.findIndex(b => b.nenType === nenType);
+  const activeColor = NEN_COLORS[nenType] || '#888';
+  const gridPolygons = useMemo(() =>
+    Array.from({ length: levels }).map((_, lvl) =>
+      Array.from({ length: n }).map((_, i) => {
+        const ratio = (lvl + 1) / levels;
+        return `${cx + r * ratio * Math.cos(angle(i))},${cy + r * ratio * Math.sin(angle(i))}`;
+      }).join(' ')
+    ), [angle]);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+      <span style={{ fontFamily: "'Cinzel', serif", fontSize: 11, color: '#c4b89a', letterSpacing: 2, textTransform: 'uppercase', opacity: 0.9 }}>Affinités Hatsu</span>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        {gridPolygons.map((pts, lvl) => <polygon key={lvl} points={pts} fill="none" stroke="#fff" strokeOpacity={0.06} strokeWidth={1} />)}
+        {HATSU_BRANCHES.map((b, i) => {
+          const isActive = i === activeIdx;
+          return <line key={i} x1={cx} y1={cy} x2={cx + r * Math.cos(angle(i))} y2={cy + r * Math.sin(angle(i))} stroke={isActive ? activeColor : '#fff'} strokeOpacity={isActive ? 0.4 : 0.1} strokeWidth={isActive ? 1.5 : 1} />;
+        })}
+        <polygon points={polygon} fill="#fff" fillOpacity={0.03} stroke="#fff" strokeWidth={1} strokeOpacity={0.15} />
+        {activeIdx >= 0 && (() => {
+          const p = dataPoints[activeIdx];
+          return <>
+            <line x1={cx} y1={cy} x2={p.x} y2={p.y} stroke={activeColor} strokeWidth={2.5} strokeOpacity={0.85} />
+            <circle cx={p.x} cy={p.y} r={7} fill={activeColor} fillOpacity={0.2} stroke={activeColor} strokeWidth={1.5} />
+            <circle cx={p.x} cy={p.y} r={3} fill={activeColor} />
+          </>;
+        })()}
+        {dataPoints.map((p, i) => i === activeIdx ? null : <circle key={i} cx={p.x} cy={p.y} r={3} fill="#c4b89a" fillOpacity={0.45} />)}
+        {HATSU_BRANCHES.map((b, i) => {
+          const lx = cx + (r + 22) * Math.cos(angle(i)), ly = cy + (r + 22) * Math.sin(angle(i));
+          const rank = hatsu?.[b.key] || 'E';
+          const isActive = i === activeIdx;
+          const col = isActive ? activeColor : '#c4b89a';
+          return (
+            <g key={i}>
+              <text x={lx} y={ly - 6} textAnchor="middle" dominantBaseline="middle" fontSize={8} fill={col} fontFamily="'Cinzel', serif" opacity={isActive ? 1 : 0.65}>{b.label}</text>
+              <text x={lx} y={ly + 7} textAnchor="middle" dominantBaseline="middle" fontSize={9} fill={col} fontFamily="monospace" fontWeight={isActive ? 'bold' : 'normal'} opacity={isActive ? 1 : 0.55}>{rank}</text>
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+// ─── NenMasteryBar ────────────────────────────────────────────────────────────
+function NenMasteryBar({ mastery, color }) {
+  const locked = mastery === 0;
+  return (
+    <div style={{ width: '100%' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <span style={{ fontSize: 11, color: '#c4b89a', fontFamily: "'Cinzel', serif", letterSpacing: 2, textTransform: 'uppercase' }}>Maîtrise du Nen</span>
+        <span style={{ fontSize: 13, fontFamily: 'monospace', color: locked ? '#444' : color, fontWeight: 'bold' }}>
+          {locked ? 'Non débloqué' : `${mastery} / 10`}
+        </span>
+      </div>
+      <div style={{ display: 'flex', gap: 3 }}>
+        {Array.from({ length: 10 }).map((_, i) => (
+          <div key={i} style={{ flex: 1, height: 6, borderRadius: 2, background: i < mastery ? color : '#2a2010', opacity: i < mastery ? (0.4 + (i / 10) * 0.6) : 1 }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── NenAbilitiesGrid ─────────────────────────────────────────────────────────
+function NenAbilitiesGrid({ abilities, color }) {
+  return (
+    <div>
+      <div style={{ fontSize: 11, color: '#c4b89a', fontFamily: "'Cinzel', serif", letterSpacing: 2, textTransform: 'uppercase', marginBottom: 8, opacity: 0.7 }}>Techniques de base</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {NEN_ABILITY_LIST.map(({ key, label }) => {
+          const unlocked = abilities?.[key] === 1;
+          return (
+            <div key={key} style={{ padding: '5px 12px', borderRadius: 20, border: `1px solid ${unlocked ? color : '#2a2010'}`, background: unlocked ? `${color}18` : 'transparent', color: unlocked ? color : '#383028', fontSize: 11, fontFamily: "'Cinzel', serif", letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ fontSize: 8 }}>{unlocked ? '◆' : '◇'}</span>{label}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── StatRow ──────────────────────────────────────────────────────────────────
+const btnStyle = (color, disabled) => ({
+  width: 22, height: 22, background: disabled ? '#111' : '#1a1208',
+  border: `1px solid ${disabled ? '#222' : color + '40'}`, color: disabled ? '#333' : '#e0d5c5',
+  borderRadius: 4, cursor: disabled ? 'default' : 'pointer', fontSize: 14,
+  display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, opacity: disabled ? 0.4 : 1,
+});
+
+function StatRow({ label, value, onInc, onDec, color, canInc, canDec }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+      <span style={{ flex: 1, fontSize: 12, color: '#c4b89a', fontFamily: "'Cinzel', serif", letterSpacing: 1 }}>{label}</span>
+      <button onClick={onDec} disabled={!canDec} style={btnStyle(color, !canDec)}>−</button>
+      <span style={{ width: 32, textAlign: 'center', fontSize: 14, fontWeight: 'bold', color: '#fff', fontFamily: 'monospace' }}>{value}</span>
+      <button onClick={onInc} disabled={!canInc} style={btnStyle(color, !canInc)}>+</button>
+      <div style={{ width: 80, height: 4, background: '#2a2010', borderRadius: 2, overflow: 'hidden' }}>
+        <div style={{ width: `${Math.min(value, 100)}%`, height: '100%', background: color, borderRadius: 2, transition: 'width 0.2s' }} />
+      </div>
+    </div>
+  );
+}
+
+// ─── APP ──────────────────────────────────────────────────────────────────────
+export default function App() {
+  const [profile, setProfile]             = useState(null);
+  const [loading, setLoading]             = useState(true);
+  const [error, setError]                 = useState(null);
+  const [discordId, setDiscordId]         = useState(null);
+  const [editing, setEditing]             = useState(false);
+  const [editData, setEditData]           = useState({});
+  const [localStats, setLocalStats]       = useState({});
+  const [saving, setSaving]               = useState(false);
+  const [imageHover, setImageHover]       = useState(false);
+  const [imageEditMode, setImageEditMode] = useState(false);
+  const [newImageUrl, setNewImageUrl]     = useState('');
+
+  useEffect(() => {
+    async function setup() {
+      try {
+        const isInDiscord = window.location.search.includes('frame_id');
+        if (!isInDiscord) {
+          setError('Cette application doit être lancée depuis Discord.');
+          setLoading(false);
+          return;
+        }
+
+        const sdk = new DiscordSDK(import.meta.env.VITE_CLIENT_ID);
+        await sdk.ready();
+
+        const { code } = await sdk.commands.authorize({
+          client_id: import.meta.env.VITE_CLIENT_ID,
+          response_type: 'code',
+          prompt: 'none',
+          scope: ['identify'],
+        });
+
+        const tokenRes = await fetch('/api/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code }),
+        });
+        if (!tokenRes.ok) throw new Error('Échec du token.');
+        const { access_token } = await tokenRes.json();
+        await sdk.commands.authenticate({ access_token });
+
+        const userRes = await fetch('https://discord.com/api/v10/users/@me', {
+          headers: { Authorization: `Bearer ${access_token}` },
+        });
+        if (!userRes.ok) throw new Error('Impossible de récupérer l\'utilisateur Discord.');
+        const user = await userRes.json();
+        setDiscordId(user.id);
+
+        // Auto-register
+        await supabase.from('players').upsert(
+          { discord_id: user.id, username: user.username },
+          { onConflict: 'discord_id', ignoreDuplicates: true }
+        );
+        await Promise.all([
+          supabase.from('stats').upsert({ discord_id: user.id }, { onConflict: 'discord_id', ignoreDuplicates: true }),
+          supabase.from('nen_abilities').upsert({ discord_id: user.id }, { onConflict: 'discord_id', ignoreDuplicates: true }),
+          supabase.from('hatsu_affinities').upsert({ discord_id: user.id }, { onConflict: 'discord_id', ignoreDuplicates: true }),
+        ]);
+
+        const p = await fetchProfile(user.id);
+        setProfile(p);
+        setLocalStats({ ...p.stats });
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    setup();
+  }, []);
+
+  const nenColor = profile ? (NEN_COLORS[profile.nen_type] || '#888') : '#888';
+  const MIN_STAT = 1;
+
+  const totalSpent = useMemo(() => {
+    if (!localStats || !profile?.stats) return 0;
+    return ['force', 'vitesse', 'resistance', 'technique']
+      .reduce((acc, k) => acc + ((localStats[k] || 0) - (profile.stats[k] || 0)), 0);
+  }, [localStats, profile?.stats]);
+
+  const pointsLeft       = profile ? profile.stat_points - totalSpent : 0;
+  const isInfinitePoints = profile?.stat_points >= 999999;
+
+  const incStat = useCallback((k) => {
+    if (!isInfinitePoints && pointsLeft <= 0) return;
+    setLocalStats(prev => ({ ...prev, [k]: (prev[k] || 0) + 1 }));
+  }, [pointsLeft, isInfinitePoints]);
+
+  const decStat = useCallback((k) => {
+    setLocalStats(prev => ((prev[k] || 0) <= MIN_STAT ? prev : { ...prev, [k]: prev[k] - 1 }));
+  }, []);
+
+  const saveStats = async () => {
+    if (!discordId) return;
+    setSaving(true);
+    try {
+      await supabase.from('stats').update(localStats).eq('discord_id', discordId);
+      if (!isInfinitePoints) {
+        await supabase.from('players').update({ stat_points: pointsLeft }).eq('discord_id', discordId);
+      }
+      const updated = await fetchProfile(discordId);
+      setProfile(updated);
+      setLocalStats({ ...updated.stats });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveCharacter = async () => {
+    if (!discordId) return;
+    setSaving(true);
+    try {
+      await supabase.from('players').update(editData).eq('discord_id', discordId);
+      const updated = await fetchProfile(discordId);
+      setProfile(updated);
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveImage = async () => {
+    if (!newImageUrl.trim() || !discordId) return;
+    await supabase.from('players').update({ char_image: newImageUrl.trim() }).eq('discord_id', discordId);
+    const updated = await fetchProfile(discordId);
+    setProfile(updated);
+    setImageEditMode(false);
+    setNewImageUrl('');
+  };
+
+  if (loading) return (
+    <div style={S.center}>
+      <div style={S.spinner} />
+      <p style={{ color: '#c4b89a', fontFamily: "'Cinzel', serif", letterSpacing: 3, marginTop: 20 }}>CHARGEMENT...</p>
+    </div>
+  );
+  if (error) return (
+    <div style={S.center}>
+      <p style={{ color: '#f72585', fontFamily: "'Cinzel', serif" }}>❌ {error}</p>
+    </div>
+  );
+
+  const physLabels = ['Force', 'Vitesse', 'Rés.', 'Tech.'];
+  const physVals   = [localStats.force ?? 1, localStats.vitesse ?? 1, localStats.resistance ?? 1, localStats.technique ?? 1];
+  const hasChanges = totalSpent !== 0;
+
+  return (
+    <div style={S.root}>
+      <div style={{ ...S.bgAccent, background: `radial-gradient(ellipse at 80% 20%, ${nenColor}18 0%, transparent 60%)` }} />
+      <div style={S.scroll}>
+
+        {/* HEADER */}
+        <div style={S.header}>
+          <div style={S.imageWrap} onMouseEnter={() => setImageHover(true)} onMouseLeave={() => setImageHover(false)} onClick={() => setImageEditMode(true)}>
+            {profile.char_image
+              ? <img src={proxyImg(profile.char_image)} alt="perso" style={S.charImg} />
+              : <div style={{ ...S.charImg, ...S.charImgPlaceholder }}><span style={{ fontSize: 40 }}>👤</span></div>}
+            {imageHover && <div style={S.imageOverlay}><span style={{ fontSize: 20 }}>✏️</span></div>}
+          </div>
+          <div style={S.headerInfo}>
+            {(profile.char_name || profile.char_surname) ? (
+              <>
+                <div style={S.charSurname}>{profile.char_surname}</div>
+                <div style={S.charName}>{profile.char_name}</div>
+              </>
+            ) : (
+              <div style={{ color: '#555', fontFamily: "'Cinzel', serif", fontSize: 13 }}>Personnage sans nom</div>
+            )}
+            <div style={{ ...S.nenBadge, borderColor: nenColor, color: nenColor }}>◈ {profile.nen_type}</div>
+            <div style={S.infoRow}><span>📍</span><span>{profile.location || 'Inconnu'}</span></div>
+            <div style={S.infoRow}><span>⭐</span><span>Réputation : {profile.reputation}</span></div>
+            <div style={S.jenny}>💰 {profile.jenny?.toLocaleString()} Jenny</div>
+            <div style={S.infoRow}><span>📊</span><span>Niv. {profile.level} — {profile.xp} XP</span></div>
+            <button onClick={() => { setEditData({ char_name: profile.char_name, char_surname: profile.char_surname, nen_type: profile.nen_type }); setEditing(true); }}
+              style={{ ...S.editBtn, borderColor: nenColor + '60', color: nenColor }}>✦ Modifier</button>
+          </div>
+        </div>
+
+        {/* MAÎTRISE NEN */}
+        <div style={S.section}><NenMasteryBar mastery={profile.nen_mastery} color={nenColor} /></div>
+
+        {/* TECHNIQUES DE BASE */}
+        <div style={S.section}><NenAbilitiesGrid abilities={profile.nen_abilities} color={nenColor} /></div>
+
+        {/* TECHNIQUES RP */}
+        {profile.techniques?.length > 0 && (
+          <div style={S.section}>
+            <div style={S.sectionTitle}>Techniques</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {profile.techniques.map(t => (
+                <div key={t.id} style={{ ...S.listItem, borderColor: nenColor + '30' }}>
+                  <span style={{ color: nenColor, marginRight: 8, fontSize: 10 }}>◆</span>
+                  <div>
+                    <div style={{ fontSize: 13 }}>{t.name}</div>
+                    {t.description && <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{t.description}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* POINTS */}
+        <div style={S.pointsBar}>
+          <span style={{ color: '#c4b89a', fontSize: 12, fontFamily: "'Cinzel', serif", letterSpacing: 1 }}>POINTS DISPONIBLES</span>
+          <span style={{ color: pointsLeft > 0 ? '#ffd60a' : '#555', fontSize: 18, fontWeight: 'bold', fontFamily: 'monospace' }}>
+            {isInfinitePoints ? '∞' : pointsLeft}
+          </span>
+        </div>
+
+        {/* STATS */}
+        <div style={S.statBlock}>
+          <RadarChart labels={physLabels} values={physVals} max={100} color="#e85d04" title="Physique" />
+          <div style={{ marginTop: 12, width: '100%' }}>
+            {[['force', 'Force'], ['vitesse', 'Vitesse'], ['resistance', 'Résistance'], ['technique', 'Technique']].map(([k, l]) => (
+              <StatRow key={k} label={l} value={localStats[k] || MIN_STAT}
+                onInc={() => incStat(k)} onDec={() => decStat(k)} color="#e85d04"
+                canInc={isInfinitePoints || pointsLeft > 0} canDec={(localStats[k] || MIN_STAT) > MIN_STAT} />
+            ))}
+          </div>
+        </div>
+        {hasChanges && (
+          <button onClick={saveStats} disabled={saving} style={{ ...S.saveBtn, borderColor: '#ffd60a', color: '#ffd60a' }}>
+            {saving ? 'Sauvegarde...' : '✦ Confirmer la répartition'}
+          </button>
+        )}
+
+        {/* HATSU */}
+        <div style={{ ...S.statBlock, marginTop: 12 }}>
+          <HatsuStar hatsu={profile.hatsu_affinities} nenType={profile.nen_type} />
+        </div>
+      </div>
+
+      {/* MODAL PERSONNAGE */}
+      {editing && (
+        <div style={S.modalBg} onClick={() => setEditing(false)}>
+          <div style={S.modal} onClick={e => e.stopPropagation()}>
+            <h2 style={S.modalTitle}>Modifier le personnage</h2>
+            <label style={S.label}>Prénom</label>
+            <input style={S.input} value={editData.char_name || ''} onChange={e => setEditData(p => ({ ...p, char_name: e.target.value }))} placeholder="Prénom" />
+            <label style={S.label}>Nom</label>
+            <input style={S.input} value={editData.char_surname || ''} onChange={e => setEditData(p => ({ ...p, char_surname: e.target.value }))} placeholder="Nom de famille" />
+            <label style={S.label}>Type de Nen</label>
+            <select style={S.input} value={editData.nen_type || 'Inconnu'} onChange={e => setEditData(p => ({ ...p, nen_type: e.target.value }))}>
+              {NEN_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+              <button onClick={() => setEditing(false)} style={{ ...S.editBtn, flex: 1, borderColor: '#333', color: '#666' }}>Annuler</button>
+              <button onClick={saveCharacter} disabled={saving} style={{ ...S.editBtn, flex: 1, borderColor: nenColor, color: nenColor }}>
+                {saving ? '...' : 'Sauvegarder'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL IMAGE */}
+      {imageEditMode && (
+        <div style={S.modalBg} onClick={() => setImageEditMode(false)}>
+          <div style={S.modal} onClick={e => e.stopPropagation()}>
+            <h2 style={S.modalTitle}>Image du personnage</h2>
+            <label style={S.label}>URL de l'image</label>
+            <input style={S.input} value={newImageUrl} onChange={e => setNewImageUrl(e.target.value)} placeholder="https://..." autoFocus />
+            {newImageUrl.trim() && (
+              <img src={proxyImg(newImageUrl.trim())} alt="preview"
+                style={{ width: '100%', height: 160, objectFit: 'cover', borderRadius: 8, marginTop: 10 }}
+                onError={e => { e.target.style.display = 'none'; }} />
+            )}
+            <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+              <button onClick={() => { setImageEditMode(false); setNewImageUrl(''); }} style={{ ...S.editBtn, flex: 1, borderColor: '#333', color: '#666' }}>Annuler</button>
+              <button onClick={saveImage} style={{ ...S.editBtn, flex: 1, borderColor: nenColor, color: nenColor }}>Confirmer</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── STYLES ───────────────────────────────────────────────────────────────────
+const S = {
+  root: { minHeight: '100vh', background: '#0d0a06', color: '#e0d5c5', fontFamily: "'Cinzel', serif", position: 'relative', overflow: 'hidden' },
+  bgAccent: { position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', transition: 'background 1s' },
+  scroll: { position: 'relative', zIndex: 1, padding: '20px 16px 40px', maxWidth: 600, margin: '0 auto' },
+  center: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0d0a06' },
+  spinner: { width: 48, height: 48, borderRadius: '50%', border: '2px solid #ffd60a30', borderTop: '2px solid #ffd60a', animation: 'spin 1s linear infinite' },
+  header: { display: 'flex', gap: 16, alignItems: 'flex-start', marginBottom: 12, padding: 16, background: '#ffffff06', borderRadius: 12, border: '1px solid #ffffff0d' },
+  imageWrap: { position: 'relative', cursor: 'pointer', flexShrink: 0, borderRadius: 10, overflow: 'hidden', width: 110, height: 140, border: '1px solid #ffffff15' },
+  charImg: { width: '100%', height: '100%', objectFit: 'cover', display: 'block' },
+  charImgPlaceholder: { background: '#1a1208', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  imageOverlay: { position: 'absolute', inset: 0, background: '#00000070', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(1px)' },
+  headerInfo: { flex: 1, display: 'flex', flexDirection: 'column', gap: 6 },
+  charSurname: { fontSize: 12, color: '#c4b89a', letterSpacing: 3, textTransform: 'uppercase', opacity: 0.7 },
+  charName: { fontSize: 22, fontWeight: 'bold', color: '#fff', letterSpacing: 1, lineHeight: 1.2 },
+  nenBadge: { display: 'inline-block', fontSize: 12, padding: '3px 10px', border: '1px solid', borderRadius: 20, letterSpacing: 2, width: 'fit-content' },
+  infoRow: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#c4b89a' },
+  jenny: { fontSize: 13, color: '#ffd60a', letterSpacing: 1 },
+  editBtn: { background: 'transparent', border: '1px solid', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontSize: 11, letterSpacing: 1, fontFamily: "'Cinzel', serif", width: 'fit-content' },
+  section: { marginBottom: 12, padding: '14px 16px', background: '#ffffff05', borderRadius: 12, border: '1px solid #ffffff0d' },
+  sectionTitle: { fontSize: 11, letterSpacing: 3, textTransform: 'uppercase', color: '#c4b89a', opacity: 0.7, marginBottom: 10 },
+  listItem: { display: 'flex', alignItems: 'flex-start', padding: '6px 10px', background: '#ffffff04', borderRadius: 6, border: '1px solid' },
+  pointsBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', margin: '12px 0', background: '#ffffff06', borderRadius: 8, border: '1px solid #ffffff0d' },
+  statBlock: { background: '#ffffff05', borderRadius: 12, border: '1px solid #ffffff0d', padding: 14, display: 'flex', flexDirection: 'column', alignItems: 'center' },
+  saveBtn: { width: '100%', marginTop: 12, background: '#ffd60a0d', border: '1px solid', borderRadius: 8, padding: '12px', cursor: 'pointer', fontSize: 13, letterSpacing: 2, fontFamily: "'Cinzel', serif" },
+  modalBg: { position: 'fixed', inset: 0, background: '#000000b0', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, backdropFilter: 'blur(4px)' },
+  modal: { background: '#0f0c08', border: '1px solid #ffffff15', borderRadius: 14, padding: 24, width: '90%', maxWidth: 340 },
+  modalTitle: { margin: '0 0 20px', fontSize: 16, color: '#e0d5c5', letterSpacing: 2 },
+  label: { display: 'block', fontSize: 11, color: '#666', letterSpacing: 1, marginBottom: 6, marginTop: 12, textTransform: 'uppercase' },
+  input: { width: '100%', background: '#1a1208', border: '1px solid #ffffff15', borderRadius: 6, padding: '8px 10px', color: '#e0d5c5', fontFamily: "'Cinzel', serif", fontSize: 13, boxSizing: 'border-box', outline: 'none' },
+};
