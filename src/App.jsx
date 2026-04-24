@@ -127,8 +127,8 @@ async function fetchTechniques(discordId) {
 // FIX: réduit r 75→58, viewBox 200→220, cx/cy 100→110 pour éviter que les labels débordent
 // FIX: labels plus grands (12→14) et plus contrastés (blanc opaque)
 function RadarChart({ labels, values, color, title }) {
-  // cx décalé à droite (110→125) pour aligner avec le diagramme hatsu ; cy ajusté en conséquence
-  const size = 220, cx = 125, cy = 110, r = 75, n = labels.length, levels = 5;
+  // Taille augmentée à 280 pour plus d'espace aux labels gauche/droite
+  const size = 280, cx = 140, cy = 140, r = 75, n = labels.length, levels = 5;
   const angle = useCallback((i) => (Math.PI * 2 * i) / n - Math.PI / 2, [n]);
   const maxVal = Math.max(...values, 1);
   const gridPolygons = useMemo(() =>
@@ -156,9 +156,9 @@ function RadarChart({ labels, values, color, title }) {
         <polygon points={polygon} fill={color} fillOpacity={0.18} stroke={color} strokeWidth={2} strokeOpacity={0.9} />
         {dataPoints.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={3} fill={color} />)}
         {Array.from({ length: n }).map((_, i) => {
-          // FIX: offset label réduit r+22→r+18 pour rapprocher les labels du diagramme
-          const lx = cx + (r + 18) * Math.cos(angle(i));
-          const ly = cy + (r + 18) * Math.sin(angle(i));
+          // FIX: offset ajusté r+18→r+20 pour éviter que les labels gauche/droite ne soient trop proches
+          const lx = cx + (r + 20) * Math.cos(angle(i));
+          const ly = cy + (r + 20) * Math.sin(angle(i));
           return (
             <text key={i} x={lx} y={ly} textAnchor="middle" dominantBaseline="middle"
               fontSize={14} fill="#ffffff" fontFamily="'Cinzel', serif" fontWeight="600">
@@ -691,7 +691,7 @@ export default function App() {
 
         {/* STATS — le wrapper SVG a une largeur fixe (220px = taille SVG) ; les barres prennent le reste */}
         <div style={{ ...S.statBlock, flexDirection: isWideScreen ? 'row' : 'column', alignItems: isWideScreen ? 'flex-start' : 'stretch', gap: isWideScreen ? 18 : 0 }}>
-          <div style={{ display: 'flex', justifyContent: 'center', width: isWideScreen ? 220 : '100%', flexShrink: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'center', width: isWideScreen ? 280 : '100%', flexShrink: 0 }}>
             <RadarChart labels={physLabels} values={physVals} color="#e85d04" title="Physique" />
           </div>
           <div style={{ marginTop: isWideScreen ? 0 : 12, width: '100%', flex: isWideScreen ? 1 : 'unset' }}>
