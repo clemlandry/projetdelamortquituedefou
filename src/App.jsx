@@ -127,7 +127,7 @@ async function fetchTechniques(discordId) {
 
 // ─── Radar Chart ───────────────────────────────────────────────────────
 function RadarChart({ labels, values, color, title }) {
-  const size = 280, cx = 140, cy = 140, r = 110, n = labels.length, levels = 5;
+  const size = 200, cx = 100, cy = 100, r = 75, n = labels.length, levels = 5;
   const angle = useCallback((i) => (Math.PI * 2 * i) / n - Math.PI / 2, [n]);
   const maxVal = Math.max(...values, 1);
   const gridPolygons = useMemo(() =>
@@ -155,8 +155,8 @@ function RadarChart({ labels, values, color, title }) {
         <polygon points={polygon} fill={color} fillOpacity={0.18} stroke={color} strokeWidth={2} strokeOpacity={0.9} />
         {dataPoints.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={3} fill={color} />)}
         {Array.from({ length: n }).map((_, i) => {
-          const lx = cx + (r + 18) * Math.cos(angle(i)), ly = cy + (r + 18) * Math.sin(angle(i));
-          return <text key={i} x={lx} y={ly} textAnchor="middle" dominantBaseline="middle" fontSize={9} fill="#e0d5c5" fontFamily="'Cinzel', serif" opacity={0.8}>{labels[i]}</text>;
+          const lx = cx + (r + 22) * Math.cos(angle(i)), ly = cy + (r + 22) * Math.sin(angle(i));
+          return <text key={i} x={lx} y={ly} textAnchor="middle" dominantBaseline="middle" fontSize={12} fill="#e0d5c5" fontFamily="'Cinzel', serif" opacity={0.9}>{labels[i]}</text>;
         })}
       </svg>
     </div>
@@ -165,7 +165,7 @@ function RadarChart({ labels, values, color, title }) {
 
 // ─── HatsuStar ─────────────────────────────────────────────────────────
 function HatsuStar({ hatsu, nenType, pendingKey, pendingNext }) {
-  const size = 320, cx = 160, cy = 160, r = 120, n = 6, levels = RANKS.length;
+  const size = 240, cx = 120, cy = 120, r = 85, n = 6, levels = RANKS.length;
 
   // fix #1 & #2 : n ajouté dans les deps de useCallback et useMemo
   const angle = useCallback((i) => (Math.PI * 2 * i) / n - Math.PI / 2, [n]);
@@ -234,7 +234,7 @@ function HatsuStar({ hatsu, nenType, pendingKey, pendingNext }) {
           return <circle key={i} cx={p.x} cy={p.y} r={3} fill="#c4b89a" fillOpacity={0.45} />;
         })}
         {HATSU_BRANCHES.map((b, i) => {
-          const lx = cx + (r + 22) * Math.cos(angle(i)), ly = cy + (r + 22) * Math.sin(angle(i));
+          const lx = cx + (r + 28) * Math.cos(angle(i)), ly = cy + (r + 28) * Math.sin(angle(i));
           let rank;
           if (b.key === pendingKey && pendingNext) {
             rank = pendingNext;
@@ -248,8 +248,8 @@ function HatsuStar({ hatsu, nenType, pendingKey, pendingNext }) {
           const opacity = isPending || isActive ? 1 : 0.55;
           return (
             <g key={i}>
-              <text x={lx} y={ly - 6} textAnchor="middle" dominantBaseline="middle" fontSize={8} fill={col} fontFamily="'Cinzel', serif" opacity={opacity} fontWeight={fontWeight}>{b.label}</text>
-              <text x={lx} y={ly + 7} textAnchor="middle" dominantBaseline="middle" fontSize={9} fill={col} fontFamily="monospace" fontWeight={fontWeight} opacity={opacity}>{rank}</text>
+              <text x={lx} y={ly - 8} textAnchor="middle" dominantBaseline="middle" fontSize={11} fill={col} fontFamily="'Cinzel', serif" opacity={opacity} fontWeight={fontWeight}>{b.label}</text>
+              <text x={lx} y={ly + 9} textAnchor="middle" dominantBaseline="middle" fontSize={13} fill={col} fontFamily="monospace" fontWeight={fontWeight} opacity={opacity}>{rank}</text>
             </g>
           );
         })}
