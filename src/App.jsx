@@ -127,7 +127,7 @@ async function fetchTechniques(discordId) {
 // FIX: réduit r 75→58, viewBox 200→220, cx/cy 100→110 pour éviter que les labels débordent
 // FIX: labels plus grands (12→14) et plus contrastés (blanc opaque)
 function RadarChart({ labels, values, color, title }) {
-  const size = 220, cx = 110, cy = 110, r = 58, n = labels.length, levels = 5;
+  const size = 330, cx = 110, cy = 110, r = 58, n = labels.length, levels = 5;
   const angle = useCallback((i) => (Math.PI * 2 * i) / n - Math.PI / 2, [n]);
   const maxVal = Math.max(...values, 1);
   const gridPolygons = useMemo(() =>
@@ -174,7 +174,7 @@ function RadarChart({ labels, values, color, title }) {
 // FIX: réduit r 85→68, viewBox 240→270, cx/cy 120→135 pour que les labels ne débordent plus
 // FIX: labels plus lisibles (fontSize 12→14, opacity inactifs 0.55→0.78)
 function HatsuStar({ hatsu, nenType, pendingKey, pendingNext }) {
-  const size = 270, cx = 135, cy = 135, r = 68, n = 6, levels = RANKS.length;
+  const size = 330, cx = 135, cy = 135, r = 68, n = 6, levels = RANKS.length;
 
   const angle = useCallback((i) => (Math.PI * 2 * i) / n - Math.PI / 2, [n]);
 
