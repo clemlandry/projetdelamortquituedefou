@@ -142,18 +142,30 @@ function RadarChart({ labels, values, color, title }) {
 }
 
 // ─── HatsuStar ────────────────────────────────────────────────────────
-function HatsuStar({ hatsu, nenType }) {
+function HatsuStar({ hatsu, nenType, pendingKey, pendingNext }) {
   const size = 220, cx = 110, cy = 110, r = 76, n = 6, levels = RANKS.length;
   const angle = useCallback((i) => (Math.PI * 2 * i) / n - Math.PI / 2, []);
-  const dataPoints = useMemo(() =>
-    HATSU_BRANCHES.map((b, i) => {
-      const rank = hatsu?.[b.key] || 'E';
+  
+  const dataPoints = useMemo(() => {
+    return HATSU_BRANCHES.map((b, i) => {
+      let rank;
+      // Si c'est la branche en attente, utiliser le rang suivant pour la prévisualisation
+      if (b.key === pendingKey && pendingNext) {
+        rank = pendingNext;
+      } else {
+        rank = hatsu?.[b.key] || 'E';
+      }
       const ratio = rank === '✖' ? 0 : (RANK_RATIO[rank] ?? (1 / RANKS.length));
       return { x: cx + r * ratio * Math.cos(angle(i)), y: cy + r * ratio * Math.sin(angle(i)) };
-    }), [hatsu, angle]);
+    });
+  }, [hatsu, angle, pendingKey, pendingNext]);
+  
   const polygon = dataPoints.map(p => `${p.x},${p.y}`).join(' ');
   const activeIdx = HATSU_BRANCHES.findIndex(b => b.nenType === nenType);
+  const pendingIdx = HATSU_BRANCHES.findIndex(b => b.key === pendingKey);
   const activeColor = NEN_COLORS[nenType] || '#888';
+  const pendingColor = '#ffd60a';
+  
   const gridPolygons = useMemo(() =>
     Array.from({ length: levels }).map((_, lvl) =>
       Array.from({ length: n }).map((_, i) => {
@@ -169,10 +181,22 @@ function HatsuStar({ hatsu, nenType }) {
         {gridPolygons.map((pts, lvl) => <polygon key={lvl} points={pts} fill="none" stroke="#fff" strokeOpacity={0.06} strokeWidth={1} />)}
         {HATSU_BRANCHES.map((b, i) => {
           const isActive = i === activeIdx;
-          return <line key={i} x1={cx} y1={cy} x2={cx + r * Math.cos(angle(i))} y2={cy + r * Math.sin(angle(i))} stroke={isActive ? activeColor : '#fff'} strokeOpacity={isActive ? 0.4 : 0.1} strokeWidth={isActive ? 1.5 : 1} />;
+          const isPending = i === pendingIdx;
+          const strokeColor = isPending ? pendingColor : (isActive ? activeColor : '#fff');
+          const strokeOpacity = isPending ? 0.8 : (isActive ? 0.4 : 0.1);
+          const strokeWidth = isPending ? 2 : (isActive ? 1.5 : 1);
+          return <line key={i} x1={cx} y1={cy} x2={cx + r * Math.cos(angle(i))} y2={cy + r * Math.sin(angle(i))} stroke={strokeColor} strokeOpacity={strokeOpacity} strokeWidth={strokeWidth} />;
         })}
         <polygon points={polygon} fill="#fff" fillOpacity={0.03} stroke="#fff" strokeWidth={1} strokeOpacity={0.15} />
-        {activeIdx >= 0 && (() => {
+        {pendingIdx >= 0 && (() => {
+          const p = dataPoints[pendingIdx];
+          return <>
+            <line x1={cx} y1={cy} x2={p.x} y2={p.y} stroke={pendingColor} strokeWidth={3} strokeOpacity={0.9} strokeDasharray="5,5" />
+            <circle cx={p.x} cy={p.y} r={9} fill={pendingColor} fillOpacity={0.3} stroke={pendingColor} strokeWidth={2} />
+            <circle cx={p.x} cy={p.y} r={4} fill={pendingColor} />
+          </>;
+        })()}
+        {activeIdx >= 0 && !pendingKey && (() => {
           const p = dataPoints[activeIdx];
           return <>
             <line x1={cx} y1={cy} x2={p.x} y2={p.y} stroke={activeColor} strokeWidth={2.5} strokeOpacity={0.85} />
@@ -180,16 +204,28 @@ function HatsuStar({ hatsu, nenType }) {
             <circle cx={p.x} cy={p.y} r={3} fill={activeColor} />
           </>;
         })()}
-        {dataPoints.map((p, i) => i === activeIdx ? null : <circle key={i} cx={p.x} cy={p.y} r={3} fill="#c4b89a" fillOpacity={0.45} />)}
+        {dataPoints.map((p, i) => {
+          if (i === activeIdx && !pendingKey) return null;
+          if (i === pendingIdx) return null;
+          return <circle key={i} cx={p.x} cy={p.y} r={3} fill="#c4b89a" fillOpacity={0.45} />;
+        })}
         {HATSU_BRANCHES.map((b, i) => {
           const lx = cx + (r + 22) * Math.cos(angle(i)), ly = cy + (r + 22) * Math.sin(angle(i));
-          const rank = hatsu?.[b.key] || 'E';
+          let rank;
+          if (b.key === pendingKey && pendingNext) {
+            rank = pendingNext;
+          } else {
+            rank = hatsu?.[b.key] || 'E';
+          }
           const isActive = i === activeIdx;
-          const col = isActive ? activeColor : '#c4b89a';
+          const isPending = i === pendingIdx;
+          const col = isPending ? pendingColor : (isActive ? activeColor : '#c4b89a');
+          const fontWeight = isPending || isActive ? 'bold' : 'normal';
+          const opacity = isPending || isActive ? 1 : 0.55;
           return (
             <g key={i}>
-              <text x={lx} y={ly - 6} textAnchor="middle" dominantBaseline="middle" fontSize={8} fill={col} fontFamily="'Cinzel', serif" opacity={isActive ? 1 : 0.65}>{b.label}</text>
-              <text x={lx} y={ly + 7} textAnchor="middle" dominantBaseline="middle" fontSize={9} fill={col} fontFamily="monospace" fontWeight={isActive ? 'bold' : 'normal'} opacity={isActive ? 1 : 0.55}>{rank}</text>
+              <text x={lx} y={ly - 6} textAnchor="middle" dominantBaseline="middle" fontSize={8} fill={col} fontFamily="'Cinzel', serif" opacity={opacity} fontWeight={fontWeight}>{b.label}</text>
+              <text x={lx} y={ly + 7} textAnchor="middle" dominantBaseline="middle" fontSize={9} fill={col} fontFamily="monospace" fontWeight={fontWeight} opacity={opacity}>{rank}</text>
             </g>
           );
         })}
@@ -302,6 +338,7 @@ export default function App() {
   const [localReserve, setLocalReserve] = useState(0);
   const [saving, setSaving] = useState(false);
   const [savingAffinity, setSavingAffinity] = useState(false);
+  const [pendingAffinity, setPendingAffinity] = useState(null);
   const [imageHover, setImageHover] = useState(false);
   const [imageEditMode, setImageEditMode] = useState(false);
   const [newImageUrl, setNewImageUrl] = useState('');
@@ -473,7 +510,7 @@ export default function App() {
     }
   };
 
-  const upgradeAffinity = async (key) => {
+  const upgradeAffinity = (key) => {
     if (!discordId || savingAffinity) return;
     if ((profile?.affinity_points ?? 0) <= 0) return;
 
@@ -483,16 +520,26 @@ export default function App() {
     const next = getNextRank(current);
     if (next === current) return;
 
+    setPendingAffinity({ key, current, next });
+  };
+
+  const confirmAffinity = async () => {
+    if (!pendingAffinity || !discordId) return;
     setSavingAffinity(true);
     try {
-      await db.update('hatsu_affinities', { [key]: next }, { 'discord_id': `eq.${discordId}` });
+      await db.update('hatsu_affinities', { [pendingAffinity.key]: pendingAffinity.next }, { 'discord_id': `eq.${discordId}` });
       await db.update('players', { affinity_points: (profile.affinity_points ?? 0) - 1 }, { 'discord_id': `eq.${discordId}` });
       const updated = await fetchProfile(discordId);
       setProfile(prev => ({ ...updated, techniques: prev?.techniques ?? [] }));
+      setPendingAffinity(null);
       void loadTechniques(discordId);
     } finally {
       setSavingAffinity(false);
     }
+  };
+
+  const cancelAffinity = () => {
+    setPendingAffinity(null);
   };
 
   const saveCharacter = async () => {
@@ -640,9 +687,15 @@ export default function App() {
 
         {/* HATSU */}
         <div style={{ ...S.statBlock, marginTop: 12, flexDirection: isWideScreen ? 'row' : 'column', alignItems: isWideScreen ? 'flex-start' : 'center', gap: isWideScreen ? 18 : 0 }}>
-          <HatsuStar hatsu={profile.hatsu_affinities} nenType={profile.nen_type} />
+          <HatsuStar 
+            hatsu={profile.hatsu_affinities} 
+            nenType={profile.nen_type} 
+            pendingKey={pendingAffinity?.key}
+            pendingNext={pendingAffinity?.next}
+          />
           <div style={{ marginTop: isWideScreen ? 0 : 10, width: '100%', flex: isWideScreen ? 1 : 'unset' }}>
             <div style={S.sectionTitle}>Améliorer les affinités</div>
+            {!pendingAffinity ? (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 {HATSU_BRANCHES.map((b) => {
                   const rank = profile.hatsu_affinities?.[b.key] ?? 'E';
@@ -671,6 +724,50 @@ export default function App() {
                   );
                 })}
               </div>
+            ) : (
+              <div>
+                <div style={{ 
+                  padding: '12px 14px', 
+                  background: '#ffd60a10', 
+                  border: '1px solid #ffd60a40',
+                  borderRadius: 8,
+                  marginBottom: 10,
+                  fontSize: 13,
+                  color: '#ffd60a',
+                }}>
+                  Prévisualisation: {HATSU_BRANCHES.find(b => b.key === pendingAffinity.key)?.label} 
+                  ({pendingAffinity.current} → {pendingAffinity.next})
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button 
+                    onClick={confirmAffinity}
+                    disabled={savingAffinity}
+                    style={{ 
+                      ...S.editBtn, 
+                      flex: 1,
+                      borderColor: '#ffd60a', 
+                      color: '#ffd60a',
+                      fontWeight: 'bold',
+                      fontSize: 13,
+                    }}
+                  >
+                    {savingAffinity ? 'Confirmation...' : '✦ Confirmer'}
+                  </button>
+                  <button 
+                    onClick={cancelAffinity}
+                    disabled={savingAffinity}
+                    style={{ 
+                      ...S.editBtn, 
+                      flex: 1,
+                      borderColor: '#333', 
+                      color: '#666',
+                    }}
+                  >
+                    Annuler
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
