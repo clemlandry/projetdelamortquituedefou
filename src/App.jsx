@@ -260,10 +260,10 @@ const btnStyle = (color, disabled) => ({
 
 function StatRow({ label, value, onInc, onDec, color, canInc, canDec }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-      <span style={{ fontSize: 16, fontWeight: 600, color: '#c4b89a', fontFamily: "'Cinzel', serif", letterSpacing: 1, minWidth: 80, textAlign: 'right', display: 'flex', alignItems: 'center', height: 36 }}>{label}</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, height: 36 }}>
+      <span style={{ fontSize: 16, fontWeight: 600, color: '#c4b89a', fontFamily: "'Cinzel', serif", letterSpacing: 1, minWidth: 80, textAlign: 'right' }}>{label}</span>
       <button onClick={onDec} disabled={!canDec} style={{ ...btnStyle(color, !canDec) }}>-</button>
-      <span style={{ width: 40, textAlign: 'center', fontSize: 18, fontWeight: 'bold', color: '#fff', fontFamily: 'monospace', display: 'flex', alignItems: 'center', justifyContent: 'center', height: 36 }}>{value}</span>
+      <span style={{ width: 40, textAlign: 'center', fontSize: 18, fontWeight: 'bold', color: '#fff', fontFamily: 'monospace' }}>{value}</span>
       <button onClick={onInc} disabled={!canInc} style={{ ...btnStyle(color, !canInc) }}>+</button>
       <div style={{ flex: 1, height: 6, background: '#2a2010', borderRadius: 3, overflow: 'hidden', minWidth: 60, alignSelf: 'center' }}>
         <div style={{ width: `${Math.min(value, 100)}%`, height: '100%', background: color, borderRadius: 3, transition: 'width 0.2s' }} />
