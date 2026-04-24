@@ -46,7 +46,7 @@ const getNextRank = (rank) => {
 
 const NEN_COLORS = {
   Inconnu: '#888', Renforceur: '#e85d04', Émetteur: '#4cc9f0',
-  Transformateur: '#7b2fff', Manipulateur: '#2dc653', Matérialiseur: '#f72585', Spécialiste: '#ffd60a',
+  Transformateur: '#7b2fff', Manipulateur: '#2dc653', Matérialisateur: '#f72585', Spécialiste: '#ffd60a',
 };
 
 const NEN_TYPES = ['Inconnu', 'Renforceur', 'Émetteur', 'Transformateur', 'Manipulateur', 'Matérialisateur', 'Spécialiste'];
@@ -54,7 +54,7 @@ const NEN_TYPES = ['Inconnu', 'Renforceur', 'Émetteur', 'Transformateur', 'Mani
 const HATSU_BRANCHES = [
   { key: 'renforcement',    label: 'Renf.',  nenType: 'Renforceur' },
   { key: 'transformation',  label: 'Trans.', nenType: 'Transformateur' },
-  { key: 'materialisation', label: 'Matér.', nenType: 'Matérialiseur' },
+  { key: 'materialisation', label: 'Matér.', nenType: 'Matérialisateur' },
   { key: 'specialisation',  label: 'Spéc.',  nenType: 'Spécialiste' },
   { key: 'manipulation',    label: 'Manip.', nenType: 'Manipulateur' },
   { key: 'emission',        label: 'Émiss.', nenType: 'Émetteur' },
