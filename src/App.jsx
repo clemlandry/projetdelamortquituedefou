@@ -127,7 +127,7 @@ async function fetchTechniques(discordId) {
 // FIX: réduit r 75→58, viewBox 200→220, cx/cy 100→110 pour éviter que les labels débordent
 // FIX: labels plus grands (12→14) et plus contrastés (blanc opaque)
 function RadarChart({ labels, values, color, title }) {
-  const size = 220, cx = 110, cy = 110, r = 85, n = labels.length, levels = 5;
+  const size = 220, cx = 110, cy = 110, r = 75, n = labels.length, levels = 5;
   const angle = useCallback((i) => (Math.PI * 2 * i) / n - Math.PI / 2, [n]);
   const maxVal = Math.max(...values, 1);
   const gridPolygons = useMemo(() =>
