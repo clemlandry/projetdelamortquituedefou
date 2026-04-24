@@ -156,9 +156,9 @@ function RadarChart({ labels, values, color, title }) {
         <polygon points={polygon} fill={color} fillOpacity={0.18} stroke={color} strokeWidth={2} strokeOpacity={0.9} />
         {dataPoints.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={3} fill={color} />)}
         {Array.from({ length: n }).map((_, i) => {
-          // FIX: offset label augmenté r+22→r+26 pour aérer, fontSize 12→14, fill blanc pur
-          const lx = cx + (r + 26) * Math.cos(angle(i));
-          const ly = cy + (r + 26) * Math.sin(angle(i));
+          // FIX: offset label réduit r+22→r+18 pour rapprocher les labels du diagramme
+          const lx = cx + (r + 18) * Math.cos(angle(i));
+          const ly = cy + (r + 18) * Math.sin(angle(i));
           return (
             <text key={i} x={lx} y={ly} textAnchor="middle" dominantBaseline="middle"
               fontSize={14} fill="#ffffff" fontFamily="'Cinzel', serif" fontWeight="600">
@@ -243,9 +243,9 @@ function HatsuStar({ hatsu, nenType, pendingKey, pendingNext }) {
           return <circle key={i} cx={p.x} cy={p.y} r={3} fill="#c4b89a" fillOpacity={0.45} />;
         })}
         {HATSU_BRANCHES.map((b, i) => {
-          // FIX: offset label ajusté pour r=85 (r+28), fontSize 14/15 conservés
-          const lx = cx + (r + 28) * Math.cos(angle(i));
-          const ly = cy + (r + 28) * Math.sin(angle(i));
+          // FIX: offset label réduit r+28→r+22 pour rapprocher les labels du diagramme
+          const lx = cx + (r + 22) * Math.cos(angle(i));
+          const ly = cy + (r + 22) * Math.sin(angle(i));
           let rank;
           if (b.key === pendingKey && pendingNext) {
             rank = pendingNext;
@@ -842,5 +842,5 @@ const S = {
   modal: { background: '#0f0c08', border: '1px solid #ffffff15', borderRadius: 14, padding: 24, width: '90%', maxWidth: 340 },
   modalTitle: { margin: '0 0 20px', fontSize: 16, color: '#e0d5c5', letterSpacing: 2 },
   label: { display: 'block', fontSize: 11, color: '#666', letterSpacing: 1, marginBottom: 6, marginTop: 12, textTransform: 'uppercase' },
-  input: { width: '100%', background: '#1a1208', border: '1px solid #ffffff15', borderRadius: 6, padding: '8px 10px', color: '#e0d5c5', fontFamily: "'Cinzel', serif", fontSize: 13, boxSizing: 'border-box', outline: 'none' },
+  input: { width: '100%', background: '#1a1208', border: '1px solid #ffffff15', borderRadius: 6, padding: '8p<x 10px', color: '#e0d5c5', fontFamily: "'Cinzel', serif", fontSize: 13, boxSizing: 'border-box', outline: 'none' },
 };
