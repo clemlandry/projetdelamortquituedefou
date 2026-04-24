@@ -252,10 +252,20 @@ function NenAbilitiesGrid({ abilities, color }) {
 
 // ─── StatRow ──────────────────────────────────────────────────────────
 const btnStyle = (color, disabled) => ({
-  width: 36, height: 36, background: disabled ? '#111' : '#1a1208',
-  border: `1px solid ${disabled ? '#222' : color + '40'}`, color: disabled ? '#333' : '#e0d5c5',
-  borderRadius: 6, cursor: disabled ? 'default' : 'pointer', fontSize: 20,
-  display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, opacity: disabled ? 0.4 : 1,
+  width: 36, height: 36,
+  padding: 0,
+  boxSizing: 'border-box',
+  background: disabled ? '#111' : '#1a1208',
+  border: `1px solid ${disabled ? '#222' : color + '40'}`,
+  color: disabled ? '#333' : '#e0d5c5',
+  borderRadius: 6,
+  cursor: disabled ? 'default' : 'pointer',
+  fontSize: 20,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  lineHeight: 1,
+  opacity: disabled ? 0.4 : 1,
 });
 
 function StatRow({ label, value, onInc, onDec, color, canInc, canDec }) {
@@ -263,7 +273,7 @@ function StatRow({ label, value, onInc, onDec, color, canInc, canDec }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
       <div style={{ fontSize: 16, fontWeight: 600, color: '#c4b89a', fontFamily: "'Cinzel', serif", letterSpacing: 1, minWidth: 80, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>{label}</div>
       <button onClick={onDec} disabled={!canDec} style={btnStyle(color, !canDec)}>-</button>
-      <div style={{ width: 40, textAlign: 'center', fontSize: 18, fontWeight: 'bold', color: '#fff', fontFamily: 'monospace', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{value}</div>
+       <div style={{ width: 40, height: 36, boxSizing: 'border-box', textAlign: 'center', fontSize: 18, fontWeight: 'bold', color: '#fff', fontFamily: 'monospace', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{value}</div>
       <button onClick={onInc} disabled={!canInc} style={btnStyle(color, !canInc)}>+</button>
       <div style={{ flex: 1, height: 6, background: '#2a2010', borderRadius: 3, overflow: 'hidden', minWidth: 60, alignSelf: 'center' }}>
         <div style={{ width: `${Math.min(value, 100)}%`, height: '100%', background: color, borderRadius: 3, transition: 'width 0.2s' }} />
