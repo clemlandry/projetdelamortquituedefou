@@ -1,7 +1,7 @@
 import { DiscordSDK } from '@discord/embedded-app-sdk';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 
-// ─── Spinner keyframes (fix #6 : @keyframes manquant) ─────────────────
+// ─── Spinner keyframes ─────────────────────────────────────────────────
 const spinnerStyle = document.createElement('style');
 spinnerStyle.textContent = `@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`;
 document.head.appendChild(spinnerStyle);
@@ -78,7 +78,6 @@ const NEN_ABILITY_LIST = [
 // ─── Helpers ───────────────────────────────────────────────────────────
 const proxyImg = (url) => (url && url.trim()) ? `/api/image?url=${encodeURIComponent(url.trim())}` : '';
 
-// fix #5 : validation d'URL côté client avant envoi
 const isValidUrl = (str) => {
   try {
     const url = new URL(str.trim());
@@ -88,7 +87,6 @@ const isValidUrl = (str) => {
   }
 };
 
-// fix #6 : sessionStorage wrappé pour résister au mode privé / quota
 const safeSession = {
   getItem(key) {
     try { return sessionStorage.getItem(key); } catch { return null; }
@@ -126,8 +124,10 @@ async function fetchTechniques(discordId) {
 }
 
 // ─── Radar Chart ───────────────────────────────────────────────────────
+// FIX: réduit r 75→58, viewBox 200→220, cx/cy 100→110 pour éviter que les labels débordent
+// FIX: labels plus grands (12→14) et plus contrastés (blanc opaque)
 function RadarChart({ labels, values, color, title }) {
-  const size = 200, cx = 100, cy = 100, r = 75, n = labels.length, levels = 5;
+  const size = 220, cx = 110, cy = 110, r = 58, n = labels.length, levels = 5;
   const angle = useCallback((i) => (Math.PI * 2 * i) / n - Math.PI / 2, [n]);
   const maxVal = Math.max(...values, 1);
   const gridPolygons = useMemo(() =>
@@ -145,9 +145,9 @@ function RadarChart({ labels, values, color, title }) {
   const polygon = dataPoints.map(p => `${p.x},${p.y}`).join(' ');
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-      <span style={{ fontFamily: "'Cinzel', serif", fontSize: 11, color, letterSpacing: 2, textTransform: 'uppercase', opacity: 0.9 }}>{title}</span>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: '100%' }}>
+      <span style={{ fontFamily: "'Cinzel', serif", fontSize: 12, color, letterSpacing: 2, textTransform: 'uppercase' }}>{title}</span>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ overflow: 'visible' }}>
         {gridPolygons.map((pts, lvl) => <polygon key={lvl} points={pts} fill="none" stroke={color} strokeOpacity={0.12} strokeWidth={1} />)}
         {Array.from({ length: n }).map((_, i) => (
           <line key={i} x1={cx} y1={cy} x2={cx + r * Math.cos(angle(i))} y2={cy + r * Math.sin(angle(i))} stroke={color} strokeOpacity={0.2} strokeWidth={1} />
@@ -155,8 +155,15 @@ function RadarChart({ labels, values, color, title }) {
         <polygon points={polygon} fill={color} fillOpacity={0.18} stroke={color} strokeWidth={2} strokeOpacity={0.9} />
         {dataPoints.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={3} fill={color} />)}
         {Array.from({ length: n }).map((_, i) => {
-          const lx = cx + (r + 22) * Math.cos(angle(i)), ly = cy + (r + 22) * Math.sin(angle(i));
-          return <text key={i} x={lx} y={ly} textAnchor="middle" dominantBaseline="middle" fontSize={12} fill="#e0d5c5" fontFamily="'Cinzel', serif" opacity={0.9}>{labels[i]}</text>;
+          // FIX: offset label augmenté r+22→r+26 pour aérer, fontSize 12→14, fill blanc pur
+          const lx = cx + (r + 26) * Math.cos(angle(i));
+          const ly = cy + (r + 26) * Math.sin(angle(i));
+          return (
+            <text key={i} x={lx} y={ly} textAnchor="middle" dominantBaseline="middle"
+              fontSize={14} fill="#ffffff" fontFamily="'Cinzel', serif" fontWeight="600">
+              {labels[i]}
+            </text>
+          );
         })}
       </svg>
     </div>
@@ -164,10 +171,11 @@ function RadarChart({ labels, values, color, title }) {
 }
 
 // ─── HatsuStar ─────────────────────────────────────────────────────────
+// FIX: réduit r 85→68, viewBox 240→270, cx/cy 120→135 pour que les labels ne débordent plus
+// FIX: labels plus lisibles (fontSize 12→14, opacity inactifs 0.55→0.78)
 function HatsuStar({ hatsu, nenType, pendingKey, pendingNext }) {
-  const size = 240, cx = 120, cy = 120, r = 85, n = 6, levels = RANKS.length;
+  const size = 270, cx = 135, cy = 135, r = 68, n = 6, levels = RANKS.length;
 
-  // fix #1 & #2 : n ajouté dans les deps de useCallback et useMemo
   const angle = useCallback((i) => (Math.PI * 2 * i) / n - Math.PI / 2, [n]);
 
   const dataPoints = useMemo(() => {
@@ -189,7 +197,6 @@ function HatsuStar({ hatsu, nenType, pendingKey, pendingNext }) {
   const activeColor = NEN_COLORS[nenType] || '#888';
   const pendingColor = '#ffd60a';
 
-  // fix #2 : n ajouté dans les deps du useMemo gridPolygons
   const gridPolygons = useMemo(() =>
     Array.from({ length: levels }).map((_, lvl) =>
       Array.from({ length: n }).map((_, i) => {
@@ -199,9 +206,9 @@ function HatsuStar({ hatsu, nenType, pendingKey, pendingNext }) {
     ), [n, angle]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-      <span style={{ fontFamily: "'Cinzel', serif", fontSize: 11, color: '#c4b89a', letterSpacing: 2, textTransform: 'uppercase', opacity: 0.9 }}>Affinités Hatsu</span>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: '100%' }}>
+      <span style={{ fontFamily: "'Cinzel', serif", fontSize: 12, color: '#c4b89a', letterSpacing: 2, textTransform: 'uppercase' }}>Affinités Hatsu</span>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ overflow: 'visible' }}>
         {gridPolygons.map((pts, lvl) => <polygon key={lvl} points={pts} fill="none" stroke="#fff" strokeOpacity={0.06} strokeWidth={1} />)}
         {HATSU_BRANCHES.map((b, i) => {
           const isActive = i === activeIdx;
@@ -234,7 +241,9 @@ function HatsuStar({ hatsu, nenType, pendingKey, pendingNext }) {
           return <circle key={i} cx={p.x} cy={p.y} r={3} fill="#c4b89a" fillOpacity={0.45} />;
         })}
         {HATSU_BRANCHES.map((b, i) => {
-          const lx = cx + (r + 28) * Math.cos(angle(i)), ly = cy + (r + 28) * Math.sin(angle(i));
+          // FIX: offset label r+28→r+32, fontSize 11→14 (branche) et 13→15 (rank), opacity inactifs 0.55→0.78
+          const lx = cx + (r + 32) * Math.cos(angle(i));
+          const ly = cy + (r + 32) * Math.sin(angle(i));
           let rank;
           if (b.key === pendingKey && pendingNext) {
             rank = pendingNext;
@@ -243,13 +252,21 @@ function HatsuStar({ hatsu, nenType, pendingKey, pendingNext }) {
           }
           const isActive = i === activeIdx;
           const isPending = i === pendingIdx;
-          const col = isPending ? pendingColor : (isActive ? activeColor : '#c4b89a');
-          const fontWeight = isPending || isActive ? 'bold' : 'normal';
-          const opacity = isPending || isActive ? 1 : 0.55;
+          const col = isPending ? pendingColor : (isActive ? activeColor : '#d4c8b0');
+          const fontWeight = isPending || isActive ? 'bold' : '500';
+          const opacity = isPending || isActive ? 1 : 0.78;
           return (
             <g key={i}>
-              <text x={lx} y={ly - 8} textAnchor="middle" dominantBaseline="middle" fontSize={11} fill={col} fontFamily="'Cinzel', serif" opacity={opacity} fontWeight={fontWeight}>{b.label}</text>
-              <text x={lx} y={ly + 9} textAnchor="middle" dominantBaseline="middle" fontSize={13} fill={col} fontFamily="monospace" fontWeight={fontWeight} opacity={opacity}>{rank}</text>
+              <text x={lx} y={ly - 9} textAnchor="middle" dominantBaseline="middle"
+                fontSize={14} fill={col} fontFamily="'Cinzel', serif"
+                opacity={opacity} fontWeight={fontWeight}>
+                {b.label}
+              </text>
+              <text x={lx} y={ly + 10} textAnchor="middle" dominantBaseline="middle"
+                fontSize={15} fill={col} fontFamily="monospace"
+                fontWeight={fontWeight} opacity={opacity}>
+                {rank}
+              </text>
             </g>
           );
         })}
@@ -359,7 +376,7 @@ export default function App() {
   const [imageHover, setImageHover] = useState(false);
   const [imageEditMode, setImageEditMode] = useState(false);
   const [newImageUrl, setNewImageUrl] = useState('');
-  const [imageUrlError, setImageUrlError] = useState(''); // fix #5
+  const [imageUrlError, setImageUrlError] = useState('');
   const [techniquesLoading, setTechniquesLoading] = useState(false);
   const [isWideScreen, setIsWideScreen] = useState(false);
 
@@ -438,7 +455,6 @@ export default function App() {
         const user = await userRes.json();
         setDiscordId(user.id);
 
-        // fix #6 : safeSession à la place de sessionStorage direct
         const rawCached = safeSession.getItem(`hxh_profile_cache_${user.id}`);
         if (rawCached) {
           try {
@@ -469,7 +485,6 @@ export default function App() {
     setup();
   }, [hydrateFromRemote]);
 
-  // fix #6 : safeSession à la place de sessionStorage direct
   useEffect(() => {
     if (!cacheKey || !profile) return;
     safeSession.setItem(cacheKey, JSON.stringify(profile));
@@ -509,7 +524,6 @@ export default function App() {
     setLocalReserve(prev => ((prev || 0) <= base ? prev : prev - 1));
   }, [profile?.nen_reserve]);
 
-  // fix #4 : guard anti double-submit
   const saveStats = async () => {
     if (!discordId || saving) return;
     if (totalSpent <= 0) return;
@@ -557,7 +571,6 @@ export default function App() {
 
   const cancelAffinity = () => setPendingAffinity(null);
 
-  // fix #4 : guard anti double-submit
   const saveCharacter = async () => {
     if (!discordId || saving) return;
     setSaving(true);
@@ -572,7 +585,6 @@ export default function App() {
     }
   };
 
-  // fix #5 : validation URL avant envoi en base
   const saveImage = async () => {
     const trimmed = newImageUrl.trim();
     if (!trimmed || !discordId) return;
@@ -675,9 +687,11 @@ export default function App() {
           </span>
         </div>
 
-        {/* STATS */}
-        <div style={{ ...S.statBlock, flexDirection: isWideScreen ? 'row' : 'column', alignItems: isWideScreen ? 'flex-start' : 'center', gap: isWideScreen ? 18 : 0 }}>
-          <RadarChart labels={physLabels} values={physVals} color="#e85d04" title="Physique" />
+        {/* STATS — FIX alignement: le SVG wrapper prend toute la largeur avec justifyContent center */}
+        <div style={{ ...S.statBlock, flexDirection: isWideScreen ? 'row' : 'column', alignItems: isWideScreen ? 'flex-start' : 'stretch', gap: isWideScreen ? 18 : 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'center', width: isWideScreen ? 'auto' : '100%' }}>
+            <RadarChart labels={physLabels} values={physVals} color="#e85d04" title="Physique" />
+          </div>
           <div style={{ marginTop: isWideScreen ? 0 : 12, width: '100%', flex: isWideScreen ? 1 : 'unset' }}>
             {[['force', 'Force'], ['vitesse', 'Vitesse'], ['resistance', 'Résistance'], ['technique', 'Technique']].map(([k, l]) => (
               <StatRow key={k} label={l} value={localStats[k] || MIN_STAT}
@@ -702,9 +716,11 @@ export default function App() {
           </button>
         )}
 
-        {/* HATSU */}
-        <div style={{ ...S.statBlock, marginTop: 12, flexDirection: isWideScreen ? 'row' : 'column', alignItems: isWideScreen ? 'flex-start' : 'center', gap: isWideScreen ? 18 : 0 }}>
-          <HatsuStar hatsu={profile.hatsu_affinities} nenType={profile.nen_type} pendingKey={pendingAffinity?.key} pendingNext={pendingAffinity?.next} />
+        {/* HATSU — FIX alignement: même wrapper centré que le statBlock stats */}
+        <div style={{ ...S.statBlock, marginTop: 12, flexDirection: isWideScreen ? 'row' : 'column', alignItems: isWideScreen ? 'flex-start' : 'stretch', gap: isWideScreen ? 18 : 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'center', width: isWideScreen ? 'auto' : '100%' }}>
+            <HatsuStar hatsu={profile.hatsu_affinities} nenType={profile.nen_type} pendingKey={pendingAffinity?.key} pendingNext={pendingAffinity?.next} />
+          </div>
           <div style={{ marginTop: isWideScreen ? 0 : 10, width: '100%', flex: isWideScreen ? 1 : 'unset' }}>
             <div style={S.sectionTitle}>Améliorer les affinités</div>
             <div style={{ fontSize: 12, color: '#c4b89a', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -774,7 +790,6 @@ export default function App() {
               placeholder="https://..."
               autoFocus
             />
-            {/* fix #5 : affichage du message d'erreur URL */}
             {imageUrlError && (
               <div style={{ color: '#f72585', fontSize: 11, marginTop: 6 }}>{imageUrlError}</div>
             )}
@@ -800,7 +815,6 @@ const S = {
   bgAccent: { position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', transition: 'background 1s' },
   scroll: { position: 'relative', zIndex: 1, padding: '20px 8px 40px', maxWidth: 980, margin: '0 auto' },
   center: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0d0a06' },
-  // fix #6 : animation référence le @keyframes spin injecté en haut du fichier
   spinner: { width: 48, height: 48, borderRadius: '50%', border: '2px solid #ffd60a30', borderTop: '2px solid #ffd60a', animation: 'spin 1s linear infinite' },
   header: { display: 'flex', gap: 16, alignItems: 'flex-start', marginBottom: 12, padding: 16, background: '#ffffff06', borderRadius: 12, border: 'none' },
   imageWrap: { position: 'relative', cursor: 'pointer', flexShrink: 0, borderRadius: 10, overflow: 'hidden', width: 110, height: 140, border: '1px solid #ffffff15' },
@@ -815,10 +829,12 @@ const S = {
   jenny: { fontSize: 13, color: '#ffd60a', letterSpacing: 1 },
   editBtn: { background: 'transparent', border: '1px solid', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontSize: 11, letterSpacing: 1, fontFamily: "'Cinzel', serif", width: 'fit-content' },
   section: { marginBottom: 12, padding: '14px 16px', background: '#ffffff05', borderRadius: 12, border: 'none' },
-  sectionTitle: { fontSize: 11, letterSpacing: 3, textTransform: 'uppercase', color: '#c4b89a', opacity: 0.7, marginBottom: 10 },
+  // FIX: sectionTitle plus lisible — fontSize 11→13, letterSpacing 3→2, opacity 0.7→0.9
+  sectionTitle: { fontSize: 13, letterSpacing: 2, textTransform: 'uppercase', color: '#c4b89a', opacity: 0.9, marginBottom: 10 },
   listItem: { display: 'flex', alignItems: 'flex-start', padding: '6px 10px', background: '#ffffff04', borderRadius: 6, border: '1px solid' },
   pointsBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', margin: '12px 0', background: '#ffffff06', borderRadius: 8, border: 'none' },
-  statBlock: { background: '#ffffff05', borderRadius: 12, border: 'none', padding: 14, display: 'flex', flexDirection: 'column', alignItems: 'center' },
+  // FIX: alignItems stretch en mobile pour que les wrappers SVG prennent bien toute la largeur
+  statBlock: { background: '#ffffff05', borderRadius: 12, border: 'none', padding: 14, display: 'flex', flexDirection: 'column', alignItems: 'stretch' },
   saveBtn: { width: '100%', marginTop: 12, background: '#ffd60a0d', border: '1px solid', borderRadius: 8, padding: '12px', cursor: 'pointer', fontSize: 13, letterSpacing: 2, fontFamily: "'Cinzel', serif" },
   modalBg: { position: 'fixed', inset: 0, background: '#000000b0', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, backdropFilter: 'blur(4px)' },
   modal: { background: '#0f0c08', border: '1px solid #ffffff15', borderRadius: 14, padding: 24, width: '90%', maxWidth: 340 },
