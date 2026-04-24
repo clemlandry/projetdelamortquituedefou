@@ -101,9 +101,13 @@ async function fetchTechniques(discordId) {
 }
 
 // ─── Radar Chart ──────────────────────────────────────────────────────
-function RadarChart({ labels, values, max = 100, color, title }) {
+function RadarChart({ labels, values, color, title }) {
   const size = 180, cx = 90, cy = 90, r = 70, n = labels.length, levels = 5;
   const angle = useCallback((i) => (Math.PI * 2 * i) / n - Math.PI / 2, [n]);
+  
+  // Calculer le maximum des valeurs pour une normalisation proportionnelle
+  const maxVal = Math.max(...values, 1); // 1 pour éviter la division par zéro
+  
   const gridPolygons = useMemo(() =>
     Array.from({ length: levels }).map((_, lvl) =>
       Array.from({ length: n }).map((_, i) => {
@@ -113,9 +117,9 @@ function RadarChart({ labels, values, max = 100, color, title }) {
     ), [n, angle]);
   const dataPoints = useMemo(() =>
     values.map((v, i) => {
-      const ratio = Math.min(v, max) / max;
+      const ratio = v / maxVal; // Proportionnel au max des valeurs
       return { x: cx + r * ratio * Math.cos(angle(i)), y: cy + r * ratio * Math.sin(angle(i)) };
-    }), [values, max, angle]);
+    }), [values, maxVal, angle]);
   const polygon = dataPoints.map(p => `${p.x},${p.y}`).join(' ');
 
   return (
@@ -606,7 +610,7 @@ export default function App() {
 
         {/* STATS */}
         <div style={{ ...S.statBlock, flexDirection: isWideScreen ? 'row' : 'column', alignItems: isWideScreen ? 'flex-start' : 'center', gap: isWideScreen ? 18 : 0 }}>
-          <RadarChart labels={physLabels} values={physVals} max={100} color="#e85d04" title="Physique" />
+          <RadarChart labels={physLabels} values={physVals} color="#e85d04" title="Physique" />
           <div style={{ marginTop: isWideScreen ? 0 : 12, width: '100%', flex: isWideScreen ? 1 : 'unset' }}>
             {[['force', 'Force'], ['vitesse', 'Vitesse'], ['resistance', 'Résistance'], ['technique', 'Technique']].map(([k, l]) => (
               <StatRow key={k} label={l} value={localStats[k] || MIN_STAT}
