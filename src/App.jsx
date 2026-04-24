@@ -252,21 +252,21 @@ function NenAbilitiesGrid({ abilities, color }) {
 
 // ─── StatRow ──────────────────────────────────────────────────────────────────
 const btnStyle = (color, disabled) => ({
-  width: 22, height: 22, background: disabled ? '#111' : '#1a1208',
+  width: 36, height: 36, background: disabled ? '#111' : '#1a1208',
   border: `1px solid ${disabled ? '#222' : color + '40'}`, color: disabled ? '#333' : '#e0d5c5',
-  borderRadius: 4, cursor: disabled ? 'default' : 'pointer', fontSize: 14,
+  borderRadius: 6, cursor: disabled ? 'default' : 'pointer', fontSize: 22,
   display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, opacity: disabled ? 0.4 : 1,
 });
 
 function StatRow({ label, value, onInc, onDec, color, canInc, canDec }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-      <span style={{ flex: 1, fontSize: 12, color: '#c4b89a', fontFamily: "'Cinzel', serif", letterSpacing: 1 }}>{label}</span>
-      <button onClick={onDec} disabled={!canDec} style={btnStyle(color, !canDec)}>−</button>
-      <span style={{ width: 32, textAlign: 'center', fontSize: 14, fontWeight: 'bold', color: '#fff', fontFamily: 'monospace' }}>{value}</span>
-      <button onClick={onInc} disabled={!canInc} style={btnStyle(color, !canInc)}>+</button>
-      <div style={{ width: 80, height: 4, background: '#2a2010', borderRadius: 2, overflow: 'hidden' }}>
-        <div style={{ width: `${Math.min(value, 100)}%`, height: '100%', background: color, borderRadius: 2, transition: 'width 0.2s' }} />
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+      <span style={{ fontSize: 16, fontWeight: 600, color: '#c4b89a', fontFamily: "'Cinzel', serif", letterSpacing: 1, minWidth: 80, textAlign: 'right' }}>{label}</span>
+      <button onClick={onDec} disabled={!canDec} style={{ ...btnStyle(color, !canDec) }}>{}</button>
+      <span style={{ width: 40, textAlign: 'center', fontSize: 18, fontWeight: 'bold', color: '#fff', fontFamily: 'monospace' }}>{value}</span>
+      <button onClick={onInc} disabled={!canInc} style={{ ...btnStyle(color, !canInc) }}>+</button>
+      <div style={{ flex: 1, height: 6, background: '#2a2010', borderRadius: 3, overflow: 'hidden', minWidth: 60 }}>
+        <div style={{ width: `${Math.min(value, 100)}%`, height: '100%', background: color, borderRadius: 3, transition: 'width 0.2s' }} />
       </div>
     </div>
   );
@@ -625,32 +625,34 @@ export default function App() {
           <HatsuStar hatsu={profile.hatsu_affinities} nenType={profile.nen_type} />
           <div style={{ marginTop: isWideScreen ? 0 : 10, width: '100%', flex: isWideScreen ? 1 : 'unset' }}>
             <div style={S.sectionTitle}>Améliorer les affinités</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              {HATSU_BRANCHES.map((b) => {
-                const rank = profile.hatsu_affinities?.[b.key] ?? 'E';
-                const blocked = rank === '✖' || rank === 'Z' || (profile.affinity_points ?? 0) <= 0 || savingAffinity;
-                return (
-                  <button
-                    key={b.key}
-                    disabled={blocked}
-                    onClick={() => upgradeAffinity(b.key)}
-                    style={{
-                      ...S.editBtn,
-                      width: '100%',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      borderColor: blocked ? '#333' : (nenColor + '66'),
-                      color: blocked ? '#666' : nenColor,
-                      padding: '7px 10px',
-                    }}
-                  >
-                    <span>{b.label} ({rank})</span>
-                    <span>{rank === '✖' ? '✖' : rank === 'Z' ? 'MAX' : '+1'}</span>
-                  </button>
-                );
-              })}
-            </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {HATSU_BRANCHES.map((b) => {
+                  const rank = profile.hatsu_affinities?.[b.key] ?? 'E';
+                  const blocked = rank === '✖' || rank === 'Z' || (profile.affinity_points ?? 0) <= 0 || savingAffinity;
+                  return (
+                    <button
+                      key={b.key}
+                      disabled={blocked}
+                      onClick={() => upgradeAffinity(b.key)}
+                      style={{
+                        ...S.editBtn,
+                        width: '100%',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        borderColor: blocked ? '#333' : (nenColor + '66'),
+                        color: blocked ? '#666' : nenColor,
+                        padding: '12px 14px',
+                        fontSize: 14,
+                        fontWeight: 'bold',
+                      }}
+                    >
+                      <span>{b.label} ({rank})</span>
+                      <span>{rank === '✖' ? '✖' : rank === 'Z' ? 'MAX' : '+1'}</span>
+                    </button>
+                  );
+                })}
+              </div>
           </div>
         </div>
       </div>
