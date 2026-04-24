@@ -127,7 +127,7 @@ async function fetchTechniques(discordId) {
 
 // ─── Radar Chart ───────────────────────────────────────────────────────
 function RadarChart({ labels, values, color, title }) {
-  const size = 180, cx = 90, cy = 90, r = 70, n = labels.length, levels = 5;
+  const size = 280, cx = 140, cy = 140, r = 110, n = labels.length, levels = 5;
   const angle = useCallback((i) => (Math.PI * 2 * i) / n - Math.PI / 2, [n]);
   const maxVal = Math.max(...values, 1);
   const gridPolygons = useMemo(() =>
@@ -165,7 +165,7 @@ function RadarChart({ labels, values, color, title }) {
 
 // ─── HatsuStar ─────────────────────────────────────────────────────────
 function HatsuStar({ hatsu, nenType, pendingKey, pendingNext }) {
-  const size = 220, cx = 110, cy = 110, r = 76, n = 6, levels = RANKS.length;
+  const size = 320, cx = 160, cy = 160, r = 120, n = 6, levels = RANKS.length;
 
   // fix #1 & #2 : n ajouté dans les deps de useCallback et useMemo
   const angle = useCallback((i) => (Math.PI * 2 * i) / n - Math.PI / 2, [n]);
