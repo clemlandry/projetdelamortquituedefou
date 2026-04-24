@@ -322,7 +322,7 @@ export default function App() {
   }, [loadTechniques]);
 
   useEffect(() => {
-    const mq = window.matchMedia('(min-width: 980px)');
+    const mq = window.matchMedia('(min-width: 700px)');
     const apply = () => setIsWideScreen(mq.matches);
     apply();
     mq.addEventListener('change', apply);
