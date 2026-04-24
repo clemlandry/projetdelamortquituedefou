@@ -1,7 +1,12 @@
 import { DiscordSDK } from '@discord/embedded-app-sdk';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 
-// ─── Client API proxy (remplace Supabase direct → passe par /api/supabase) ──
+// ─── Spinner keyframes (fix #6 : @keyframes manquant) ─────────────────
+const spinnerStyle = document.createElement('style');
+spinnerStyle.textContent = `@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`;
+document.head.appendChild(spinnerStyle);
+
+// ─── Client API proxy ──────────────────────────────────────────────────
 const db = {
   async select(table, { select = '*', filters = {} } = {}) {
     const res = await fetch('/api/supabase', {
@@ -35,7 +40,7 @@ const db = {
   },
 };
 
-// ─── Constantes ───────────────────────────────────────────────────────
+// ─── Constantes ────────────────────────────────────────────────────────
 const RANKS = ['E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS', 'Z'];
 const RANK_RATIO = Object.fromEntries(RANKS.map((r, i) => [r, (i + 1) / RANKS.length]));
 const getNextRank = (rank) => {
@@ -70,8 +75,28 @@ const NEN_ABILITY_LIST = [
   { key: 'gyo', label: 'Gyo' },
 ];
 
-// ─── Helpers ──────────────────────────────────────────────────────────
+// ─── Helpers ───────────────────────────────────────────────────────────
 const proxyImg = (url) => (url && url.trim()) ? `/api/image?url=${encodeURIComponent(url.trim())}` : '';
+
+// fix #5 : validation d'URL côté client avant envoi
+const isValidUrl = (str) => {
+  try {
+    const url = new URL(str.trim());
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
+// fix #6 : sessionStorage wrappé pour résister au mode privé / quota
+const safeSession = {
+  getItem(key) {
+    try { return sessionStorage.getItem(key); } catch { return null; }
+  },
+  setItem(key, value) {
+    try { sessionStorage.setItem(key, value); } catch { /* quota ou mode privé : on ignore */ }
+  },
+};
 
 async function fetchProfile(discordId) {
   const rows = await db.select('players', {
@@ -100,14 +125,11 @@ async function fetchTechniques(discordId) {
   return Array.isArray(rows) ? rows : [];
 }
 
-// ─── Radar Chart ──────────────────────────────────────────────────────
+// ─── Radar Chart ───────────────────────────────────────────────────────
 function RadarChart({ labels, values, color, title }) {
   const size = 180, cx = 90, cy = 90, r = 70, n = labels.length, levels = 5;
   const angle = useCallback((i) => (Math.PI * 2 * i) / n - Math.PI / 2, [n]);
-  
-  // Calculer le maximum des valeurs pour une normalisation proportionnelle
-  const maxVal = Math.max(...values, 1); // 1 pour éviter la division par zéro
-  
+  const maxVal = Math.max(...values, 1);
   const gridPolygons = useMemo(() =>
     Array.from({ length: levels }).map((_, lvl) =>
       Array.from({ length: n }).map((_, i) => {
@@ -117,7 +139,7 @@ function RadarChart({ labels, values, color, title }) {
     ), [n, angle]);
   const dataPoints = useMemo(() =>
     values.map((v, i) => {
-      const ratio = v / maxVal; // Proportionnel au max des valeurs
+      const ratio = v / maxVal;
       return { x: cx + r * ratio * Math.cos(angle(i)), y: cy + r * ratio * Math.sin(angle(i)) };
     }), [values, maxVal, angle]);
   const polygon = dataPoints.map(p => `${p.x},${p.y}`).join(' ');
@@ -141,15 +163,16 @@ function RadarChart({ labels, values, color, title }) {
   );
 }
 
-// ─── HatsuStar ────────────────────────────────────────────────────────
+// ─── HatsuStar ─────────────────────────────────────────────────────────
 function HatsuStar({ hatsu, nenType, pendingKey, pendingNext }) {
   const size = 220, cx = 110, cy = 110, r = 76, n = 6, levels = RANKS.length;
-  const angle = useCallback((i) => (Math.PI * 2 * i) / n - Math.PI / 2, []);
-  
+
+  // fix #1 & #2 : n ajouté dans les deps de useCallback et useMemo
+  const angle = useCallback((i) => (Math.PI * 2 * i) / n - Math.PI / 2, [n]);
+
   const dataPoints = useMemo(() => {
     return HATSU_BRANCHES.map((b, i) => {
       let rank;
-      // Si c'est la branche en attente, utiliser le rang suivant pour la prévisualisation
       if (b.key === pendingKey && pendingNext) {
         rank = pendingNext;
       } else {
@@ -159,20 +182,21 @@ function HatsuStar({ hatsu, nenType, pendingKey, pendingNext }) {
       return { x: cx + r * ratio * Math.cos(angle(i)), y: cy + r * ratio * Math.sin(angle(i)) };
     });
   }, [hatsu, angle, pendingKey, pendingNext]);
-  
+
   const polygon = dataPoints.map(p => `${p.x},${p.y}`).join(' ');
   const activeIdx = HATSU_BRANCHES.findIndex(b => b.nenType === nenType);
   const pendingIdx = HATSU_BRANCHES.findIndex(b => b.key === pendingKey);
   const activeColor = NEN_COLORS[nenType] || '#888';
   const pendingColor = '#ffd60a';
-  
+
+  // fix #2 : n ajouté dans les deps du useMemo gridPolygons
   const gridPolygons = useMemo(() =>
     Array.from({ length: levels }).map((_, lvl) =>
       Array.from({ length: n }).map((_, i) => {
         const ratio = (lvl + 1) / levels;
         return `${cx + r * ratio * Math.cos(angle(i))},${cy + r * ratio * Math.sin(angle(i))}`;
       }).join(' ')
-    ), [angle]);
+    ), [n, angle]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
@@ -234,7 +258,7 @@ function HatsuStar({ hatsu, nenType, pendingKey, pendingNext }) {
   );
 }
 
-// ─── NenBars ───────────────────────────────────────────────────────────
+// ─── NenBars ────────────────────────────────────────────────────────────
 function NenBars({ mastery, reserve, points, affinityPoints, color }) {
   const safeMastery = Math.max(0, Math.min(mastery || 0, 10));
   const maxPoints = Math.max(0, (reserve || 0) * 10);
@@ -244,21 +268,16 @@ function NenBars({ mastery, reserve, points, affinityPoints, color }) {
     <div style={{ width: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
         <span style={{ fontSize: 11, color: '#c4b89a', fontFamily: "'Cinzel', serif", letterSpacing: 2, textTransform: 'uppercase' }}>Maîtrise Nen</span>
-        <span style={{ fontSize: 13, fontFamily: 'monospace', color, fontWeight: 'bold' }}>
-          {safeMastery} / 10
-        </span>
+        <span style={{ fontSize: 13, fontFamily: 'monospace', color, fontWeight: 'bold' }}>{safeMastery} / 10</span>
       </div>
       <div style={{ display: 'flex', gap: 3, marginBottom: 12 }}>
         {Array.from({ length: 10 }).map((_, i) => (
           <div key={i} style={{ flex: 1, height: 6, borderRadius: 2, background: i < safeMastery ? color : '#2a2010', opacity: i < safeMastery ? (0.4 + (i / 10) * 0.6) : 1 }} />
         ))}
       </div>
-
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
         <span style={{ fontSize: 11, color: '#c4b89a', fontFamily: "'Cinzel', serif", letterSpacing: 2, textTransform: 'uppercase' }}>Réserve Nen</span>
-        <span style={{ fontSize: 13, fontFamily: 'monospace', color, fontWeight: 'bold' }}>
-          {safePoints} / {maxPoints}
-        </span>
+        <span style={{ fontSize: 13, fontFamily: 'monospace', color, fontWeight: 'bold' }}>{safePoints} / {maxPoints}</span>
       </div>
       <div style={{ width: '100%', height: 8, borderRadius: 3, background: '#2a2010', overflow: 'hidden', marginBottom: 8 }}>
         <div style={{ width: `${reserveRatio * 100}%`, height: '100%', background: color, transition: 'width 0.2s' }} />
@@ -271,7 +290,7 @@ function NenBars({ mastery, reserve, points, affinityPoints, color }) {
   );
 }
 
-// ─── NenAbilitiesGrid ─────────────────────────────────────────────────
+// ─── NenAbilitiesGrid ──────────────────────────────────────────────────
 function NenAbilitiesGrid({ abilities, color }) {
   return (
     <div>
@@ -290,7 +309,7 @@ function NenAbilitiesGrid({ abilities, color }) {
   );
 }
 
-// ─── StatRow ──────────────────────────────────────────────────────────
+// ─── StatRow ───────────────────────────────────────────────────────────
 const btnStyle = (color, disabled) => ({
   width: 36, height: 36,
   padding: 0,
@@ -312,7 +331,6 @@ const btnStyle = (color, disabled) => ({
 function StatRow({ label, value, onInc, onDec, color, canInc, canDec }) {
   const STAT_MAX = 5250;
   const statPercentage = Math.min((value / STAT_MAX) * 100, 100);
-  
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
       <div style={{ fontSize: 16, fontWeight: 600, color: '#c4b89a', fontFamily: "'Cinzel', serif", letterSpacing: 1, width: 110, minWidth: 110, flexShrink: 0, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>{label}</div>
@@ -326,7 +344,7 @@ function StatRow({ label, value, onInc, onDec, color, canInc, canDec }) {
   );
 }
 
-// ─── APP ──────────────────────────────────────────────────────────────
+// ─── APP ───────────────────────────────────────────────────────────────
 export default function App() {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -342,6 +360,7 @@ export default function App() {
   const [imageHover, setImageHover] = useState(false);
   const [imageEditMode, setImageEditMode] = useState(false);
   const [newImageUrl, setNewImageUrl] = useState('');
+  const [imageUrlError, setImageUrlError] = useState(''); // fix #5
   const [techniquesLoading, setTechniquesLoading] = useState(false);
   const [isWideScreen, setIsWideScreen] = useState(false);
 
@@ -368,7 +387,6 @@ export default function App() {
       db.upsert('nen_abilities', { discord_id: userId }, { onConflict: 'discord_id', ignoreDuplicates: true }),
       db.upsert('hatsu_affinities', { discord_id: userId }, { onConflict: 'discord_id', ignoreDuplicates: true }),
     ]);
-
     const p = await fetchProfile(userId);
     setProfile(prev => ({ ...p, techniques: prev?.techniques ?? [] }));
     setLocalStats({ ...p.stats });
@@ -421,7 +439,8 @@ export default function App() {
         const user = await userRes.json();
         setDiscordId(user.id);
 
-        const rawCached = sessionStorage.getItem(`hxh_profile_cache_${user.id}`);
+        // fix #6 : safeSession à la place de sessionStorage direct
+        const rawCached = safeSession.getItem(`hxh_profile_cache_${user.id}`);
         if (rawCached) {
           try {
             const cached = JSON.parse(rawCached);
@@ -433,7 +452,7 @@ export default function App() {
               setLoading(false);
             }
           } catch {
-            // Cache invalide: on ignore et on recharge depuis le serveur.
+            // Cache invalide : on ignore et on recharge depuis le serveur
           }
         }
 
@@ -451,9 +470,10 @@ export default function App() {
     setup();
   }, [hydrateFromRemote]);
 
+  // fix #6 : safeSession à la place de sessionStorage direct
   useEffect(() => {
     if (!cacheKey || !profile) return;
-    sessionStorage.setItem(cacheKey, JSON.stringify(profile));
+    safeSession.setItem(cacheKey, JSON.stringify(profile));
   }, [cacheKey, profile]);
 
   const nenColor = profile ? (NEN_COLORS[profile.nen_type] || '#888') : '#888';
@@ -490,8 +510,9 @@ export default function App() {
     setLocalReserve(prev => ((prev || 0) <= base ? prev : prev - 1));
   }, [profile?.nen_reserve]);
 
+  // fix #4 : guard anti double-submit
   const saveStats = async () => {
-    if (!discordId) return;
+    if (!discordId || saving) return;
     if (totalSpent <= 0) return;
     setSaving(true);
     try {
@@ -513,13 +534,10 @@ export default function App() {
   const upgradeAffinity = (key) => {
     if (!discordId || savingAffinity) return;
     if ((profile?.affinity_points ?? 0) <= 0) return;
-
     const current = profile?.hatsu_affinities?.[key];
     if (!current || current === '✖' || current === 'Z') return;
-
     const next = getNextRank(current);
     if (next === current) return;
-
     setPendingAffinity({ key, current, next });
   };
 
@@ -538,12 +556,11 @@ export default function App() {
     }
   };
 
-  const cancelAffinity = () => {
-    setPendingAffinity(null);
-  };
+  const cancelAffinity = () => setPendingAffinity(null);
 
+  // fix #4 : guard anti double-submit
   const saveCharacter = async () => {
-    if (!discordId) return;
+    if (!discordId || saving) return;
     setSaving(true);
     try {
       await db.update('players', editData, { 'discord_id': `eq.${discordId}` });
@@ -556,9 +573,16 @@ export default function App() {
     }
   };
 
+  // fix #5 : validation URL avant envoi en base
   const saveImage = async () => {
-    if (!newImageUrl.trim() || !discordId) return;
-    await db.update('players', { char_image: newImageUrl.trim() }, { 'discord_id': `eq.${discordId}` });
+    const trimmed = newImageUrl.trim();
+    if (!trimmed || !discordId) return;
+    if (!isValidUrl(trimmed)) {
+      setImageUrlError('URL invalide. Elle doit commencer par http:// ou https://');
+      return;
+    }
+    setImageUrlError('');
+    await db.update('players', { char_image: trimmed }, { 'discord_id': `eq.${discordId}` });
     const updated = await fetchProfile(discordId);
     setProfile(prev => ({ ...updated, techniques: prev?.techniques ?? [] }));
     setImageEditMode(false);
@@ -616,13 +640,7 @@ export default function App() {
 
         {/* RESSOURCES NEN */}
         <div style={S.section}>
-          <NenBars
-            mastery={profile.nen_mastery}
-            reserve={profile.nen_reserve}
-            points={profile.nen_points}
-            affinityPoints={profile.affinity_points}
-            color={nenColor}
-          />
+          <NenBars mastery={profile.nen_mastery} reserve={profile.nen_reserve} points={profile.nen_points} affinityPoints={profile.affinity_points} color={nenColor} />
         </div>
 
         {/* TECHNIQUES DE BASE */}
@@ -687,12 +705,7 @@ export default function App() {
 
         {/* HATSU */}
         <div style={{ ...S.statBlock, marginTop: 12, flexDirection: isWideScreen ? 'row' : 'column', alignItems: isWideScreen ? 'flex-start' : 'center', gap: isWideScreen ? 18 : 0 }}>
-          <HatsuStar 
-            hatsu={profile.hatsu_affinities} 
-            nenType={profile.nen_type} 
-            pendingKey={pendingAffinity?.key}
-            pendingNext={pendingAffinity?.next}
-          />
+          <HatsuStar hatsu={profile.hatsu_affinities} nenType={profile.nen_type} pendingKey={pendingAffinity?.key} pendingNext={pendingAffinity?.next} />
           <div style={{ marginTop: isWideScreen ? 0 : 10, width: '100%', flex: isWideScreen ? 1 : 'unset' }}>
             <div style={S.sectionTitle}>Améliorer les affinités</div>
             {!pendingAffinity ? (
@@ -701,23 +714,8 @@ export default function App() {
                   const rank = profile.hatsu_affinities?.[b.key] ?? 'E';
                   const blocked = rank === '✖' || rank === 'Z' || (profile.affinity_points ?? 0) <= 0 || savingAffinity;
                   return (
-                    <button
-                      key={b.key}
-                      disabled={blocked}
-                      onClick={() => upgradeAffinity(b.key)}
-                      style={{
-                        ...S.editBtn,
-                        width: '100%',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        borderColor: blocked ? '#333' : (nenColor + '66'),
-                        color: blocked ? '#666' : nenColor,
-                        padding: '12px 14px',
-                        fontSize: 14,
-                        fontWeight: 'bold',
-                      }}
-                    >
+                    <button key={b.key} disabled={blocked} onClick={() => upgradeAffinity(b.key)}
+                      style={{ ...S.editBtn, width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderColor: blocked ? '#333' : (nenColor + '66'), color: blocked ? '#666' : nenColor, padding: '12px 14px', fontSize: 14, fontWeight: 'bold' }}>
                       <span>{b.label} ({rank})</span>
                       <span>{rank === '✖' ? '✖' : rank === 'Z' ? 'MAX' : '+1'}</span>
                     </button>
@@ -726,45 +724,14 @@ export default function App() {
               </div>
             ) : (
               <div>
-                <div style={{ 
-                  padding: '12px 14px', 
-                  background: '#ffd60a10', 
-                  border: '1px solid #ffd60a40',
-                  borderRadius: 8,
-                  marginBottom: 10,
-                  fontSize: 13,
-                  color: '#ffd60a',
-                }}>
-                  Prévisualisation: {HATSU_BRANCHES.find(b => b.key === pendingAffinity.key)?.label} 
-                  ({pendingAffinity.current} → {pendingAffinity.next})
+                <div style={{ padding: '12px 14px', background: '#ffd60a10', border: '1px solid #ffd60a40', borderRadius: 8, marginBottom: 10, fontSize: 13, color: '#ffd60a' }}>
+                  Prévisualisation: {HATSU_BRANCHES.find(b => b.key === pendingAffinity.key)?.label} ({pendingAffinity.current} → {pendingAffinity.next})
                 </div>
                 <div style={{ display: 'flex', gap: 10 }}>
-                  <button 
-                    onClick={confirmAffinity}
-                    disabled={savingAffinity}
-                    style={{ 
-                      ...S.editBtn, 
-                      flex: 1,
-                      borderColor: '#ffd60a', 
-                      color: '#ffd60a',
-                      fontWeight: 'bold',
-                      fontSize: 13,
-                    }}
-                  >
+                  <button onClick={confirmAffinity} disabled={savingAffinity} style={{ ...S.editBtn, flex: 1, borderColor: '#ffd60a', color: '#ffd60a', fontWeight: 'bold', fontSize: 13 }}>
                     {savingAffinity ? 'Confirmation...' : '✦ Confirmer'}
                   </button>
-                  <button 
-                    onClick={cancelAffinity}
-                    disabled={savingAffinity}
-                    style={{ 
-                      ...S.editBtn, 
-                      flex: 1,
-                      borderColor: '#333', 
-                      color: '#666',
-                    }}
-                  >
-                    Annuler
-                  </button>
+                  <button onClick={cancelAffinity} disabled={savingAffinity} style={{ ...S.editBtn, flex: 1, borderColor: '#333', color: '#666' }}>Annuler</button>
                 </div>
               </div>
             )}
@@ -793,18 +760,28 @@ export default function App() {
 
       {/* MODAL IMAGE */}
       {imageEditMode && (
-        <div style={S.modalBg} onClick={() => setImageEditMode(false)}>
+        <div style={S.modalBg} onClick={() => { setImageEditMode(false); setImageUrlError(''); }}>
           <div style={S.modal} onClick={e => e.stopPropagation()}>
             <h2 style={S.modalTitle}>Image du personnage</h2>
             <label style={S.label}>URL de l'image</label>
-            <input style={S.input} value={newImageUrl} onChange={e => setNewImageUrl(e.target.value)} placeholder="https://..." autoFocus />
-            {newImageUrl.trim() && (
+            <input
+              style={{ ...S.input, borderColor: imageUrlError ? '#f72585' : '#ffffff15' }}
+              value={newImageUrl}
+              onChange={e => { setNewImageUrl(e.target.value); setImageUrlError(''); }}
+              placeholder="https://..."
+              autoFocus
+            />
+            {/* fix #5 : affichage du message d'erreur URL */}
+            {imageUrlError && (
+              <div style={{ color: '#f72585', fontSize: 11, marginTop: 6 }}>{imageUrlError}</div>
+            )}
+            {newImageUrl.trim() && !imageUrlError && (
               <img src={proxyImg(newImageUrl.trim())} alt="preview"
                 style={{ width: '100%', height: 160, objectFit: 'cover', borderRadius: 8, marginTop: 10 }}
                 onError={e => { e.target.style.display = 'none'; }} />
             )}
             <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-              <button onClick={() => { setImageEditMode(false); setNewImageUrl(''); }} style={{ ...S.editBtn, flex: 1, borderColor: '#333', color: '#666' }}>Annuler</button>
+              <button onClick={() => { setImageEditMode(false); setNewImageUrl(''); setImageUrlError(''); }} style={{ ...S.editBtn, flex: 1, borderColor: '#333', color: '#666' }}>Annuler</button>
               <button onClick={saveImage} style={{ ...S.editBtn, flex: 1, borderColor: nenColor, color: nenColor }}>Confirmer</button>
             </div>
           </div>
@@ -814,12 +791,13 @@ export default function App() {
   );
 }
 
-// ─── STYLES ───────────────────────────────────────────────────────────
+// ─── STYLES ────────────────────────────────────────────────────────────
 const S = {
   root: { minHeight: '100vh', background: '#0d0a06', color: '#e0d5c5', fontFamily: "'Cinzel', serif", position: 'relative', overflow: 'hidden' },
   bgAccent: { position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', transition: 'background 1s' },
   scroll: { position: 'relative', zIndex: 1, padding: '20px 8px 40px', maxWidth: 980, margin: '0 auto' },
   center: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0d0a06' },
+  // fix #6 : animation référence le @keyframes spin injecté en haut du fichier
   spinner: { width: 48, height: 48, borderRadius: '50%', border: '2px solid #ffd60a30', borderTop: '2px solid #ffd60a', animation: 'spin 1s linear infinite' },
   header: { display: 'flex', gap: 16, alignItems: 'flex-start', marginBottom: 12, padding: 16, background: '#ffffff06', borderRadius: 12, border: 'none' },
   imageWrap: { position: 'relative', cursor: 'pointer', flexShrink: 0, borderRadius: 10, overflow: 'hidden', width: 110, height: 140, border: '1px solid #ffffff15' },
