@@ -69,6 +69,60 @@ app.get('/api/image', async (req, res) => {
   }
 });
 
+// ── /api/supabase ─────────────────────────────────────────────────────────────
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY;
+
+function sbHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'apikey': SUPABASE_KEY,
+    'Authorization': `Bearer ${SUPABASE_KEY}`,
+    'Prefer': 'return=representation',
+  };
+}
+
+app.post('/api/supabase', async (req, res) => {
+  const { action, table, select, filters = {}, data, onConflict, ignoreDuplicates } = req.body ?? {};
+  if (!action || !table) return res.status(400).json({ error: 'Missing action or table' });
+
+  try {
+    let url, method, body, headers = sbHeaders();
+
+    if (action === 'select') {
+      const params = new URLSearchParams();
+      if (select) params.set('select', select);
+      Object.entries(filters).forEach(([k, v]) => params.set(k, v));
+      url = `${SUPABASE_URL}/rest/v1/${table}?${params}`;
+      method = 'GET';
+    } else if (action === 'upsert') {
+      const prefer = ['return=representation'];
+      if (ignoreDuplicates) prefer.push('resolution=ignore-duplicates');
+      else if (onConflict) prefer.push('resolution=merge-duplicates');
+      headers['Prefer'] = prefer.join(',');
+      const params = new URLSearchParams();
+      if (onConflict) params.set('on_conflict', onConflict);
+      url = `${SUPABASE_URL}/rest/v1/${table}?${params}`;
+      method = 'POST';
+      body = JSON.stringify(Array.isArray(data) ? data : [data]);
+    } else if (action === 'update') {
+      const qs = Object.entries(filters).map(([k,v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+      url = `${SUPABASE_URL}/rest/v1/${table}${qs ? '?' + qs : ''}`;
+      method = 'PATCH';
+      body = JSON.stringify(data);
+    } else {
+      return res.status(400).json({ error: `Unknown action: ${action}` });
+    }
+
+    const response = await fetch(url, { method, headers, body });
+    const text = await response.text();
+    if (!response.ok) return res.status(response.status).json({ error: text });
+    return res.json({ data: text ? JSON.parse(text) : [], error: null });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Sert le build Vite en prod locale ─────────────────────────────────────────
 const distPath = path.join(__dirname, 'dist');
 app.use(express.static(distPath));

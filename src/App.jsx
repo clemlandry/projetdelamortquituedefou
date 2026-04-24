@@ -1,6 +1,39 @@
 import { DiscordSDK } from '@discord/embedded-app-sdk';
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { supabase } from './lib/supabase';
+
+// ─── Client API proxy (remplace Supabase direct → passe par /api/supabase) ──
+const db = {
+  async select(table, { select = '*', filters = {} } = {}) {
+    const res = await fetch('/api/supabase', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'select', table, select, filters }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'select error');
+    return json.data; // array
+  },
+  async upsert(table, data, { onConflict, ignoreDuplicates = false } = {}) {
+    const res = await fetch('/api/supabase', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'upsert', table, data, onConflict, ignoreDuplicates }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'upsert error');
+    return json.data;
+  },
+  async update(table, data, filters = {}) {
+    const res = await fetch('/api/supabase', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'update', table, data, filters }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'update error');
+    return json.data;
+  },
+};
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 const RANKS      = ['E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS', 'Z'];
@@ -36,12 +69,12 @@ const NEN_ABILITY_LIST = [
 const proxyImg = (url) => (url && url.trim()) ? `/api/image?url=${encodeURIComponent(url.trim())}` : '';
 
 async function fetchProfile(discordId) {
-  const { data, error } = await supabase
-    .from('players')
-    .select('*, stats(*), techniques(*), nen_abilities(*), hatsu_affinities(*)')
-    .eq('discord_id', discordId)
-    .single();
-  if (error) throw new Error(error.message);
+  const rows = await db.select('players', {
+    select: '*, stats(*), techniques(*), nen_abilities(*), hatsu_affinities(*)',
+    filters: { 'discord_id': `eq.${discordId}` },
+  });
+  if (!rows || rows.length === 0) throw new Error('Joueur introuvable.');
+  const data = rows[0];
   return {
     ...data,
     stats:            Array.isArray(data.stats)            ? data.stats[0]            ?? {} : data.stats            ?? {},
@@ -256,14 +289,14 @@ export default function App() {
         setDiscordId(user.id);
 
         // Auto-register
-        await supabase.from('players').upsert(
+        await db.upsert('players',
           { discord_id: user.id, username: user.username },
           { onConflict: 'discord_id', ignoreDuplicates: true }
         );
         await Promise.all([
-          supabase.from('stats').upsert({ discord_id: user.id }, { onConflict: 'discord_id', ignoreDuplicates: true }),
-          supabase.from('nen_abilities').upsert({ discord_id: user.id }, { onConflict: 'discord_id', ignoreDuplicates: true }),
-          supabase.from('hatsu_affinities').upsert({ discord_id: user.id }, { onConflict: 'discord_id', ignoreDuplicates: true }),
+          db.upsert('stats',            { discord_id: user.id }, { onConflict: 'discord_id', ignoreDuplicates: true }),
+          db.upsert('nen_abilities',    { discord_id: user.id }, { onConflict: 'discord_id', ignoreDuplicates: true }),
+          db.upsert('hatsu_affinities', { discord_id: user.id }, { onConflict: 'discord_id', ignoreDuplicates: true }),
         ]);
 
         const p = await fetchProfile(user.id);
@@ -303,9 +336,9 @@ export default function App() {
     if (!discordId) return;
     setSaving(true);
     try {
-      await supabase.from('stats').update(localStats).eq('discord_id', discordId);
+      await db.update('stats', localStats, { 'discord_id': `eq.${discordId}` });
       if (!isInfinitePoints) {
-        await supabase.from('players').update({ stat_points: pointsLeft }).eq('discord_id', discordId);
+        await db.update('players', { stat_points: pointsLeft }, { 'discord_id': `eq.${discordId}` });
       }
       const updated = await fetchProfile(discordId);
       setProfile(updated);
@@ -319,7 +352,7 @@ export default function App() {
     if (!discordId) return;
     setSaving(true);
     try {
-      await supabase.from('players').update(editData).eq('discord_id', discordId);
+      await db.update('players', editData, { 'discord_id': `eq.${discordId}` });
       const updated = await fetchProfile(discordId);
       setProfile(updated);
       setEditing(false);
@@ -330,7 +363,7 @@ export default function App() {
 
   const saveImage = async () => {
     if (!newImageUrl.trim() || !discordId) return;
-    await supabase.from('players').update({ char_image: newImageUrl.trim() }).eq('discord_id', discordId);
+    await db.update('players', { char_image: newImageUrl.trim() }, { 'discord_id': `eq.${discordId}` });
     const updated = await fetchProfile(discordId);
     setProfile(updated);
     setImageEditMode(false);
