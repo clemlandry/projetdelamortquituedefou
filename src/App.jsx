@@ -259,7 +259,7 @@ function HatsuStar({ hatsu, nenType, pendingKey, pendingNext }) {
 }
 
 // ─── NenBars ────────────────────────────────────────────────────────────
-function NenBars({ mastery, reserve, points, affinityPoints, color }) {
+function NenBars({ mastery, reserve, points, color }) {
   const safeMastery = Math.max(0, Math.min(mastery || 0, 10));
   const maxPoints = Math.max(0, (reserve || 0) * 10);
   const safePoints = Math.max(0, Math.min(points || 0, maxPoints));
@@ -284,7 +284,6 @@ function NenBars({ mastery, reserve, points, affinityPoints, color }) {
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#c4b89a' }}>
         <span>Réserve: <b style={{ color: '#e0d5c5' }}>{reserve || 0}</b></span>
-        <span>Points d'affinité: <b style={{ color: '#e0d5c5' }}>{affinityPoints || 0}</b></span>
       </div>
     </div>
   );
@@ -640,7 +639,7 @@ export default function App() {
 
         {/* RESSOURCES NEN */}
         <div style={S.section}>
-          <NenBars mastery={profile.nen_mastery} reserve={profile.nen_reserve} points={profile.nen_points} affinityPoints={profile.affinity_points} color={nenColor} />
+          <NenBars mastery={profile.nen_mastery} reserve={profile.nen_reserve} points={profile.nen_points} color={nenColor} />
         </div>
 
         {/* TECHNIQUES DE BASE */}
@@ -708,6 +707,10 @@ export default function App() {
           <HatsuStar hatsu={profile.hatsu_affinities} nenType={profile.nen_type} pendingKey={pendingAffinity?.key} pendingNext={pendingAffinity?.next} />
           <div style={{ marginTop: isWideScreen ? 0 : 10, width: '100%', flex: isWideScreen ? 1 : 'unset' }}>
             <div style={S.sectionTitle}>Améliorer les affinités</div>
+            <div style={{ fontSize: 12, color: '#c4b89a', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>Points d'affinité disponibles:</span>
+              <span style={{ color: '#ffd60a', fontWeight: 'bold', fontFamily: 'monospace' }}>{profile.affinity_points ?? 0}</span>
+            </div>
             {!pendingAffinity ? (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 {HATSU_BRANCHES.map((b) => {
