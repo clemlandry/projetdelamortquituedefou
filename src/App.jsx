@@ -127,7 +127,8 @@ async function fetchTechniques(discordId) {
 // FIX: réduit r 75→58, viewBox 200→220, cx/cy 100→110 pour éviter que les labels débordent
 // FIX: labels plus grands (12→14) et plus contrastés (blanc opaque)
 function RadarChart({ labels, values, color, title }) {
-  const size = 220, cx = 110, cy = 110, r = 75, n = labels.length, levels = 5;
+  // cx décalé à droite (110→125) pour aligner avec le diagramme hatsu ; cy ajusté en conséquence
+  const size = 220, cx = 125, cy = 110, r = 75, n = labels.length, levels = 5;
   const angle = useCallback((i) => (Math.PI * 2 * i) / n - Math.PI / 2, [n]);
   const maxVal = Math.max(...values, 1);
   const gridPolygons = useMemo(() =>
@@ -145,8 +146,8 @@ function RadarChart({ labels, values, color, title }) {
   const polygon = dataPoints.map(p => `${p.x},${p.y}`).join(' ');
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: '100%' }}>
-      <span style={{ fontFamily: "'Cinzel', serif", fontSize: 12, color, letterSpacing: 2, textTransform: 'uppercase' }}>{title}</span>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, width: '100%' }}>
+      <span style={{ fontFamily: "'Cinzel', serif", fontSize: 12, color, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 2 }}>{title}</span>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ overflow: 'visible' }}>
         {gridPolygons.map((pts, lvl) => <polygon key={lvl} points={pts} fill="none" stroke={color} strokeOpacity={0.12} strokeWidth={1} />)}
         {Array.from({ length: n }).map((_, i) => (
@@ -174,7 +175,8 @@ function RadarChart({ labels, values, color, title }) {
 // FIX: réduit r 85→68, viewBox 240→270, cx/cy 120→135 pour que les labels ne débordent plus
 // FIX: labels plus lisibles (fontSize 12→14, opacity inactifs 0.55→0.78)
 function HatsuStar({ hatsu, nenType, pendingKey, pendingNext }) {
-  const size = 270, cx = 135, cy = 135, r = 68, n = 6, levels = RANKS.length;
+  // Taille augmentée : size 270→320, r 68→85, cx/cy 135→160
+  const size = 320, cx = 160, cy = 160, r = 85, n = 6, levels = RANKS.length;
 
   const angle = useCallback((i) => (Math.PI * 2 * i) / n - Math.PI / 2, [n]);
 
@@ -206,8 +208,8 @@ function HatsuStar({ hatsu, nenType, pendingKey, pendingNext }) {
     ), [n, angle]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: '100%' }}>
-      <span style={{ fontFamily: "'Cinzel', serif", fontSize: 12, color: '#c4b89a', letterSpacing: 2, textTransform: 'uppercase' }}>Affinités Hatsu</span>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, width: '100%' }}>
+      <span style={{ fontFamily: "'Cinzel', serif", fontSize: 12, color: '#c4b89a', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 2 }}>Affinités Hatsu</span>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ overflow: 'visible' }}>
         {gridPolygons.map((pts, lvl) => <polygon key={lvl} points={pts} fill="none" stroke="#fff" strokeOpacity={0.06} strokeWidth={1} />)}
         {HATSU_BRANCHES.map((b, i) => {
@@ -241,9 +243,9 @@ function HatsuStar({ hatsu, nenType, pendingKey, pendingNext }) {
           return <circle key={i} cx={p.x} cy={p.y} r={3} fill="#c4b89a" fillOpacity={0.45} />;
         })}
         {HATSU_BRANCHES.map((b, i) => {
-          // FIX: offset label r+28→r+32, fontSize 11→14 (branche) et 13→15 (rank), opacity inactifs 0.55→0.78
-          const lx = cx + (r + 32) * Math.cos(angle(i));
-          const ly = cy + (r + 32) * Math.sin(angle(i));
+          // FIX: offset label ajusté pour r=85 (r+28), fontSize 14/15 conservés
+          const lx = cx + (r + 28) * Math.cos(angle(i));
+          const ly = cy + (r + 28) * Math.sin(angle(i));
           let rank;
           if (b.key === pendingKey && pendingNext) {
             rank = pendingNext;
@@ -687,9 +689,9 @@ export default function App() {
           </span>
         </div>
 
-        {/* STATS — FIX alignement: le SVG wrapper prend toute la largeur avec justifyContent center */}
+        {/* STATS — le wrapper SVG a une largeur fixe (220px = taille SVG) ; les barres prennent le reste */}
         <div style={{ ...S.statBlock, flexDirection: isWideScreen ? 'row' : 'column', alignItems: isWideScreen ? 'flex-start' : 'stretch', gap: isWideScreen ? 18 : 0 }}>
-          <div style={{ display: 'flex', justifyContent: 'center', width: isWideScreen ? 'auto' : '100%' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', width: isWideScreen ? 220 : '100%', flexShrink: 0 }}>
             <RadarChart labels={physLabels} values={physVals} color="#e85d04" title="Physique" />
           </div>
           <div style={{ marginTop: isWideScreen ? 0 : 12, width: '100%', flex: isWideScreen ? 1 : 'unset' }}>
