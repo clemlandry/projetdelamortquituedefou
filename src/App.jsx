@@ -288,6 +288,7 @@ export default function App() {
   const [imageEditMode, setImageEditMode] = useState(false);
   const [newImageUrl, setNewImageUrl]     = useState('');
   const [techniquesLoading, setTechniquesLoading] = useState(false);
+  const [isWideScreen, setIsWideScreen] = useState(false);
 
   const cacheKey = useMemo(
     () => discordId ? `hxh_profile_cache_${discordId}` : null,
@@ -319,6 +320,14 @@ export default function App() {
     setLocalReserve(p.nen_reserve ?? 0);
     void loadTechniques(userId);
   }, [loadTechniques]);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 980px)');
+    const apply = () => setIsWideScreen(mq.matches);
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, []);
 
   useEffect(() => {
     async function setup() {
@@ -585,9 +594,9 @@ export default function App() {
         </div>
 
         {/* STATS */}
-        <div style={S.statBlock}>
+        <div style={{ ...S.statBlock, flexDirection: isWideScreen ? 'row' : 'column', alignItems: isWideScreen ? 'flex-start' : 'center', gap: isWideScreen ? 18 : 0 }}>
           <RadarChart labels={physLabels} values={physVals} max={100} color="#e85d04" title="Physique" />
-          <div style={{ marginTop: 12, width: '100%' }}>
+          <div style={{ marginTop: isWideScreen ? 0 : 12, width: '100%', flex: isWideScreen ? 1 : 'unset' }}>
             {[['force', 'Force'], ['vitesse', 'Vitesse'], ['resistance', 'Résistance'], ['technique', 'Technique']].map(([k, l]) => (
               <StatRow key={k} label={l} value={localStats[k] || MIN_STAT}
                 onInc={() => incStat(k)} onDec={() => decStat(k)} color="#e85d04"
@@ -612,9 +621,9 @@ export default function App() {
         )}
 
         {/* HATSU */}
-        <div style={{ ...S.statBlock, marginTop: 12 }}>
+        <div style={{ ...S.statBlock, marginTop: 12, flexDirection: isWideScreen ? 'row' : 'column', alignItems: isWideScreen ? 'flex-start' : 'center', gap: isWideScreen ? 18 : 0 }}>
           <HatsuStar hatsu={profile.hatsu_affinities} nenType={profile.nen_type} />
-          <div style={{ marginTop: 10, width: '100%' }}>
+          <div style={{ marginTop: isWideScreen ? 0 : 10, width: '100%', flex: isWideScreen ? 1 : 'unset' }}>
             <div style={S.sectionTitle}>Améliorer les affinités</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               {HATSU_BRANCHES.map((b) => {
