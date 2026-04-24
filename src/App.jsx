@@ -38,6 +38,11 @@ const db = {
 // ─── Constantes ───────────────────────────────────────────────────────────────
 const RANKS      = ['E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS', 'Z'];
 const RANK_RATIO = Object.fromEntries(RANKS.map((r, i) => [r, (i + 1) / RANKS.length]));
+const getNextRank = (rank) => {
+  const idx = RANKS.indexOf(rank);
+  if (idx < 0 || idx >= RANKS.length - 1) return rank;
+  return RANKS[idx + 1];
+};
 
 const NEN_COLORS = {
   Inconnu: '#888', Renforceur: '#e85d04', Émetteur: '#4cc9f0',
@@ -181,21 +186,34 @@ function HatsuStar({ hatsu, nenType }) {
   );
 }
 
-// ─── NenResourceBars ──────────────────────────────────────────────────────────
-function NenResourceBars({ reserve, points, affinityPoints, color }) {
+// ─── NenBars ───────────────────────────────────────────────────────────────────
+function NenBars({ mastery, reserve, points, affinityPoints, color }) {
+  const safeMastery = Math.max(0, Math.min(mastery || 0, 10));
   const maxPoints = Math.max(0, (reserve || 0) * 10);
   const safePoints = Math.max(0, Math.min(points || 0, maxPoints));
-  const ratio = maxPoints > 0 ? safePoints / maxPoints : 0;
+  const reserveRatio = maxPoints > 0 ? safePoints / maxPoints : 0;
   return (
     <div style={{ width: '100%' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <span style={{ fontSize: 11, color: '#c4b89a', fontFamily: "'Cinzel', serif", letterSpacing: 2, textTransform: 'uppercase' }}>Ressources Nen</span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
+        <span style={{ fontSize: 11, color: '#c4b89a', fontFamily: "'Cinzel', serif", letterSpacing: 2, textTransform: 'uppercase' }}>Maîtrise Nen</span>
+        <span style={{ fontSize: 13, fontFamily: 'monospace', color, fontWeight: 'bold' }}>
+          {safeMastery} / 10
+        </span>
+      </div>
+      <div style={{ display: 'flex', gap: 3, marginBottom: 12 }}>
+        {Array.from({ length: 10 }).map((_, i) => (
+          <div key={i} style={{ flex: 1, height: 6, borderRadius: 2, background: i < safeMastery ? color : '#2a2010', opacity: i < safeMastery ? (0.4 + (i / 10) * 0.6) : 1 }} />
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
+        <span style={{ fontSize: 11, color: '#c4b89a', fontFamily: "'Cinzel', serif", letterSpacing: 2, textTransform: 'uppercase' }}>Réserve Nen</span>
         <span style={{ fontSize: 13, fontFamily: 'monospace', color, fontWeight: 'bold' }}>
           {safePoints} / {maxPoints}
         </span>
       </div>
       <div style={{ width: '100%', height: 8, borderRadius: 3, background: '#2a2010', overflow: 'hidden', marginBottom: 8 }}>
-        <div style={{ width: `${ratio * 100}%`, height: '100%', background: color, transition: 'width 0.2s' }} />
+        <div style={{ width: `${reserveRatio * 100}%`, height: '100%', background: color, transition: 'width 0.2s' }} />
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#c4b89a' }}>
         <span>Réserve: <b style={{ color: '#e0d5c5' }}>{reserve || 0}</b></span>
@@ -255,7 +273,9 @@ export default function App() {
   const [editing, setEditing]             = useState(false);
   const [editData, setEditData]           = useState({});
   const [localStats, setLocalStats]       = useState({});
+  const [localReserve, setLocalReserve]   = useState(0);
   const [saving, setSaving]               = useState(false);
+  const [savingAffinity, setSavingAffinity] = useState(false);
   const [imageHover, setImageHover]       = useState(false);
   const [imageEditMode, setImageEditMode] = useState(false);
   const [newImageUrl, setNewImageUrl]     = useState('');
@@ -310,6 +330,7 @@ export default function App() {
         const p = await fetchProfile(user.id);
         setProfile(p);
         setLocalStats({ ...p.stats });
+        setLocalReserve(p.nen_reserve ?? 0);
       } catch (err) {
         setError(err.message);
       } finally {
@@ -324,9 +345,11 @@ export default function App() {
 
   const totalSpent = useMemo(() => {
     if (!localStats || !profile?.stats) return 0;
-    return ['force', 'vitesse', 'resistance', 'technique']
+    const spentStats = ['force', 'vitesse', 'resistance', 'technique']
       .reduce((acc, k) => acc + ((localStats[k] || 0) - (profile.stats[k] || 0)), 0);
-  }, [localStats, profile?.stats]);
+    const spentReserve = (localReserve || 0) - (profile?.nen_reserve || 0);
+    return spentStats + spentReserve;
+  }, [localStats, localReserve, profile?.stats, profile?.nen_reserve]);
 
   const pointsLeft       = profile ? profile.stat_points - totalSpent : 0;
   const isInfinitePoints = profile?.stat_points >= 999999;
@@ -341,20 +364,53 @@ export default function App() {
     setLocalStats(prev => ((prev[k] || MIN_STAT) <= base ? prev : { ...prev, [k]: prev[k] - 1 }));
   }, [profile?.stats]);
 
+  const incReserve = useCallback(() => {
+    if (!isInfinitePoints && pointsLeft <= 0) return;
+    setLocalReserve(prev => (prev || 0) + 1);
+  }, [pointsLeft, isInfinitePoints]);
+
+  const decReserve = useCallback(() => {
+    const base = profile?.nen_reserve ?? 0;
+    setLocalReserve(prev => ((prev || 0) <= base ? prev : prev - 1));
+  }, [profile?.nen_reserve]);
+
   const saveStats = async () => {
     if (!discordId) return;
     if (totalSpent <= 0) return;
     setSaving(true);
     try {
       await db.update('stats', localStats, { 'discord_id': `eq.${discordId}` });
+      await db.update('players', { nen_reserve: localReserve }, { 'discord_id': `eq.${discordId}` });
       if (!isInfinitePoints) {
         await db.update('players', { stat_points: pointsLeft }, { 'discord_id': `eq.${discordId}` });
       }
       const updated = await fetchProfile(discordId);
       setProfile(updated);
       setLocalStats({ ...updated.stats });
+      setLocalReserve(updated.nen_reserve ?? 0);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const upgradeAffinity = async (key) => {
+    if (!discordId || savingAffinity) return;
+    if ((profile?.affinity_points ?? 0) <= 0) return;
+
+    const current = profile?.hatsu_affinities?.[key];
+    if (!current || current === '✖' || current === 'Z') return;
+
+    const next = getNextRank(current);
+    if (next === current) return;
+
+    setSavingAffinity(true);
+    try {
+      await db.update('hatsu_affinities', { [key]: next }, { 'discord_id': `eq.${discordId}` });
+      await db.update('players', { affinity_points: (profile.affinity_points ?? 0) - 1 }, { 'discord_id': `eq.${discordId}` });
+      const updated = await fetchProfile(discordId);
+      setProfile(updated);
+    } finally {
+      setSavingAffinity(false);
     }
   };
 
@@ -430,7 +486,8 @@ export default function App() {
 
         {/* RESSOURCES NEN */}
         <div style={S.section}>
-          <NenResourceBars
+          <NenBars
+            mastery={profile.nen_mastery}
             reserve={profile.nen_reserve}
             points={profile.nen_points}
             affinityPoints={profile.affinity_points}
@@ -477,6 +534,15 @@ export default function App() {
                 canInc={isInfinitePoints || pointsLeft > 0}
                 canDec={(localStats[k] || MIN_STAT) > (profile?.stats?.[k] ?? MIN_STAT)} />
             ))}
+            <StatRow
+              label="Réserve Nen"
+              value={localReserve || 0}
+              onInc={incReserve}
+              onDec={decReserve}
+              color="#4cc9f0"
+              canInc={isInfinitePoints || pointsLeft > 0}
+              canDec={(localReserve || 0) > (profile?.nen_reserve ?? 0)}
+            />
           </div>
         </div>
         {hasChanges && (
@@ -488,6 +554,35 @@ export default function App() {
         {/* HATSU */}
         <div style={{ ...S.statBlock, marginTop: 12 }}>
           <HatsuStar hatsu={profile.hatsu_affinities} nenType={profile.nen_type} />
+          <div style={{ marginTop: 10, width: '100%' }}>
+            <div style={S.sectionTitle}>Améliorer les affinités</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {HATSU_BRANCHES.map((b) => {
+                const rank = profile.hatsu_affinities?.[b.key] ?? 'E';
+                const blocked = rank === '✖' || rank === 'Z' || (profile.affinity_points ?? 0) <= 0 || savingAffinity;
+                return (
+                  <button
+                    key={b.key}
+                    disabled={blocked}
+                    onClick={() => upgradeAffinity(b.key)}
+                    style={{
+                      ...S.editBtn,
+                      width: '100%',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      borderColor: blocked ? '#333' : (nenColor + '66'),
+                      color: blocked ? '#666' : nenColor,
+                      padding: '7px 10px',
+                    }}
+                  >
+                    <span>{b.label} ({rank})</span>
+                    <span>{rank === '✖' ? '✖' : rank === 'Z' ? 'MAX' : '+1'}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
 
