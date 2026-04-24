@@ -11,7 +11,7 @@ const db = {
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || 'select error');
-    return json.data; // array
+    return json.data;
   },
   async upsert(table, data, { onConflict, ignoreDuplicates = false } = {}) {
     const res = await fetch('/api/supabase', {
@@ -35,8 +35,8 @@ const db = {
   },
 };
 
-// ─── Constantes ───────────────────────────────────────────────────────────────
-const RANKS      = ['E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS', 'Z'];
+// ─── Constantes ───────────────────────────────────────────────────────
+const RANKS = ['E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS', 'Z'];
 const RANK_RATIO = Object.fromEntries(RANKS.map((r, i) => [r, (i + 1) / RANKS.length]));
 const getNextRank = (rank) => {
   const idx = RANKS.indexOf(rank);
@@ -52,38 +52,38 @@ const NEN_COLORS = {
 const NEN_TYPES = ['Inconnu', 'Renforceur', 'Émetteur', 'Transformateur', 'Manipulateur', 'Matérialisateur', 'Spécialiste'];
 
 const HATSU_BRANCHES = [
-  { key: 'renforcement',    label: 'Renf.',  nenType: 'Renforceur' },
-  { key: 'transformation',  label: 'Trans.', nenType: 'Transformateur' },
+  { key: 'renforcement', label: 'Renf.', nenType: 'Renforceur' },
+  { key: 'transformation', label: 'Trans.', nenType: 'Transformateur' },
   { key: 'materialisation', label: 'Matér.', nenType: 'Matérialisateur' },
-  { key: 'specialisation',  label: 'Spéc.',  nenType: 'Spécialiste' },
-  { key: 'manipulation',    label: 'Manip.', nenType: 'Manipulateur' },
-  { key: 'emission',        label: 'Émiss.', nenType: 'Émetteur' },
+  { key: 'specialisation', label: 'Spéc.', nenType: 'Spécialiste' },
+  { key: 'manipulation', label: 'Manip.', nenType: 'Manipulateur' },
+  { key: 'emission', label: 'Émiss.', nenType: 'Émetteur' },
 ];
 
 const NEN_ABILITY_LIST = [
-  { key: 'ten',   label: 'Ten'   },
-  { key: 'ren',   label: 'Ren'   },
+  { key: 'ten', label: 'Ten' },
+  { key: 'ren', label: 'Ren' },
   { key: 'zetsu', label: 'Zetsu' },
-  { key: 'in_',   label: 'In'    },
-  { key: 'en',    label: 'En'    },
-  { key: 'ken',   label: 'Ken'   },
-  { key: 'gyo',   label: 'Gyo'   },
+  { key: 'in_', label: 'In' },
+  { key: 'en', label: 'En' },
+  { key: 'ken', label: 'Ken' },
+  { key: 'gyo', label: 'Gyo' },
 ];
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────
 const proxyImg = (url) => (url && url.trim()) ? `/api/image?url=${encodeURIComponent(url.trim())}` : '';
 
 async function fetchProfile(discordId) {
   const rows = await db.select('players', {
     select: '*, stats(*), nen_abilities(*), hatsu_affinities(*)',
-    filters: { 'discord_id': `eq.${discordId}` },
+    filters: { discord_id: `eq.${discordId}` },
   });
   if (!rows || rows.length === 0) throw new Error('Joueur introuvable.');
   const data = rows[0];
   return {
     ...data,
-    stats:            Array.isArray(data.stats)            ? data.stats[0]            ?? {} : data.stats            ?? {},
-    nen_abilities:    Array.isArray(data.nen_abilities)    ? data.nen_abilities[0]    ?? {} : data.nen_abilities    ?? {},
+    stats: Array.isArray(data.stats) ? data.stats[0] ?? {} : data.stats ?? {},
+    nen_abilities: Array.isArray(data.nen_abilities) ? data.nen_abilities[0] ?? {} : data.nen_abilities ?? {},
     hatsu_affinities: Array.isArray(data.hatsu_affinities) ? data.hatsu_affinities[0] ?? {} : data.hatsu_affinities ?? {},
     techniques: [],
     nen_reserve: data.nen_reserve ?? 0,
@@ -95,15 +95,15 @@ async function fetchProfile(discordId) {
 async function fetchTechniques(discordId) {
   const rows = await db.select('techniques', {
     select: '*',
-    filters: { 'discord_id': `eq.${discordId}` },
+    filters: { discord_id: `eq.${discordId}` },
   });
   return Array.isArray(rows) ? rows : [];
 }
 
-// ─── Radar Chart ──────────────────────────────────────────────────────────────
+// ─── Radar Chart ──────────────────────────────────────────────────────
 function RadarChart({ labels, values, max = 100, color, title }) {
   const size = 180, cx = 90, cy = 90, r = 70, n = labels.length, levels = 5;
-  const angle    = useCallback((i) => (Math.PI * 2 * i) / n - Math.PI / 2, [n]);
+  const angle = useCallback((i) => (Math.PI * 2 * i) / n - Math.PI / 2, [n]);
   const gridPolygons = useMemo(() =>
     Array.from({ length: levels }).map((_, lvl) =>
       Array.from({ length: n }).map((_, i) => {
@@ -137,7 +137,7 @@ function RadarChart({ labels, values, max = 100, color, title }) {
   );
 }
 
-// ─── HatsuStar ────────────────────────────────────────────────────────────────
+// ─── HatsuStar ────────────────────────────────────────────────────────
 function HatsuStar({ hatsu, nenType }) {
   const size = 220, cx = 110, cy = 110, r = 76, n = 6, levels = RANKS.length;
   const angle = useCallback((i) => (Math.PI * 2 * i) / n - Math.PI / 2, []);
@@ -147,8 +147,8 @@ function HatsuStar({ hatsu, nenType }) {
       const ratio = rank === '✖' ? 0 : (RANK_RATIO[rank] ?? (1 / RANKS.length));
       return { x: cx + r * ratio * Math.cos(angle(i)), y: cy + r * ratio * Math.sin(angle(i)) };
     }), [hatsu, angle]);
-  const polygon    = dataPoints.map(p => `${p.x},${p.y}`).join(' ');
-  const activeIdx  = HATSU_BRANCHES.findIndex(b => b.nenType === nenType);
+  const polygon = dataPoints.map(p => `${p.x},${p.y}`).join(' ');
+  const activeIdx = HATSU_BRANCHES.findIndex(b => b.nenType === nenType);
   const activeColor = NEN_COLORS[nenType] || '#888';
   const gridPolygons = useMemo(() =>
     Array.from({ length: levels }).map((_, lvl) =>
@@ -194,7 +194,7 @@ function HatsuStar({ hatsu, nenType }) {
   );
 }
 
-// ─── NenBars ───────────────────────────────────────────────────────────────────
+// ─── NenBars ───────────────────────────────────────────────────────────
 function NenBars({ mastery, reserve, points, affinityPoints, color }) {
   const safeMastery = Math.max(0, Math.min(mastery || 0, 10));
   const maxPoints = Math.max(0, (reserve || 0) * 10);
@@ -231,7 +231,7 @@ function NenBars({ mastery, reserve, points, affinityPoints, color }) {
   );
 }
 
-// ─── NenAbilitiesGrid ─────────────────────────────────────────────────────────
+// ─── NenAbilitiesGrid ─────────────────────────────────────────────────
 function NenAbilitiesGrid({ abilities, color }) {
   return (
     <div>
@@ -250,7 +250,7 @@ function NenAbilitiesGrid({ abilities, color }) {
   );
 }
 
-// ─── StatRow ──────────────────────────────────────────────────────────────────
+// ─── StatRow ──────────────────────────────────────────────────────────
 const btnStyle = (color, disabled) => ({
   width: 36, height: 36, background: disabled ? '#111' : '#1a1208',
   border: `1px solid ${disabled ? '#222' : color + '40'}`, color: disabled ? '#333' : '#e0d5c5',
@@ -260,11 +260,11 @@ const btnStyle = (color, disabled) => ({
 
 function StatRow({ label, value, onInc, onDec, color, canInc, canDec }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, height: 36 }}>
-      <span style={{ fontSize: 16, fontWeight: 600, color: '#c4b89a', fontFamily: "'Cinzel', serif", letterSpacing: 1, minWidth: 80, textAlign: 'right' }}>{label}</span>
-      <button onClick={onDec} disabled={!canDec} style={{ ...btnStyle(color, !canDec) }}>-</button>
-      <span style={{ width: 40, textAlign: 'center', fontSize: 18, fontWeight: 'bold', color: '#fff', fontFamily: 'monospace' }}>{value}</span>
-      <button onClick={onInc} disabled={!canInc} style={{ ...btnStyle(color, !canInc) }}>+</button>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+      <div style={{ fontSize: 16, fontWeight: 600, color: '#c4b89a', fontFamily: "'Cinzel', serif", letterSpacing: 1, minWidth: 80, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>{label}</div>
+      <button onClick={onDec} disabled={!canDec} style={btnStyle(color, !canDec)}>-</button>
+      <div style={{ width: 40, textAlign: 'center', fontSize: 18, fontWeight: 'bold', color: '#fff', fontFamily: 'monospace', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{value}</div>
+      <button onClick={onInc} disabled={!canInc} style={btnStyle(color, !canInc)}>+</button>
       <div style={{ flex: 1, height: 6, background: '#2a2010', borderRadius: 3, overflow: 'hidden', minWidth: 60, alignSelf: 'center' }}>
         <div style={{ width: `${Math.min(value, 100)}%`, height: '100%', background: color, borderRadius: 3, transition: 'width 0.2s' }} />
       </div>
@@ -272,21 +272,21 @@ function StatRow({ label, value, onInc, onDec, color, canInc, canDec }) {
   );
 }
 
-// ─── APP ──────────────────────────────────────────────────────────────────────
+// ─── APP ──────────────────────────────────────────────────────────────
 export default function App() {
-  const [profile, setProfile]             = useState(null);
-  const [loading, setLoading]             = useState(true);
-  const [error, setError]                 = useState(null);
-  const [discordId, setDiscordId]         = useState(null);
-  const [editing, setEditing]             = useState(false);
-  const [editData, setEditData]           = useState({});
-  const [localStats, setLocalStats]       = useState({});
-  const [localReserve, setLocalReserve]   = useState(0);
-  const [saving, setSaving]               = useState(false);
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [discordId, setDiscordId] = useState(null);
+  const [editing, setEditing] = useState(false);
+  const [editData, setEditData] = useState({});
+  const [localStats, setLocalStats] = useState({});
+  const [localReserve, setLocalReserve] = useState(0);
+  const [saving, setSaving] = useState(false);
   const [savingAffinity, setSavingAffinity] = useState(false);
-  const [imageHover, setImageHover]       = useState(false);
+  const [imageHover, setImageHover] = useState(false);
   const [imageEditMode, setImageEditMode] = useState(false);
-  const [newImageUrl, setNewImageUrl]     = useState('');
+  const [newImageUrl, setNewImageUrl] = useState('');
   const [techniquesLoading, setTechniquesLoading] = useState(false);
   const [isWideScreen, setIsWideScreen] = useState(false);
 
@@ -309,8 +309,8 @@ export default function App() {
   const hydrateFromRemote = useCallback(async (userId, username) => {
     await db.upsert('players', { discord_id: userId, username }, { onConflict: 'discord_id', ignoreDuplicates: true });
     await Promise.all([
-      db.upsert('stats',            { discord_id: userId }, { onConflict: 'discord_id', ignoreDuplicates: true }),
-      db.upsert('nen_abilities',    { discord_id: userId }, { onConflict: 'discord_id', ignoreDuplicates: true }),
+      db.upsert('stats', { discord_id: userId }, { onConflict: 'discord_id', ignoreDuplicates: true }),
+      db.upsert('nen_abilities', { discord_id: userId }, { onConflict: 'discord_id', ignoreDuplicates: true }),
       db.upsert('hatsu_affinities', { discord_id: userId }, { onConflict: 'discord_id', ignoreDuplicates: true }),
     ]);
 
@@ -412,7 +412,7 @@ export default function App() {
     return spentStats + spentReserve;
   }, [localStats, localReserve, profile?.stats, profile?.nen_reserve]);
 
-  const pointsLeft       = profile ? profile.stat_points - totalSpent : 0;
+  const pointsLeft = profile ? profile.stat_points - totalSpent : 0;
   const isInfinitePoints = profile?.stat_points >= 999999;
 
   const incStat = useCallback((k) => {
@@ -514,7 +514,7 @@ export default function App() {
   );
 
   const physLabels = ['Force', 'Vitesse', 'Rés.', 'Tech.'];
-  const physVals   = [localStats.force ?? 1, localStats.vitesse ?? 1, localStats.resistance ?? 1, localStats.technique ?? 1];
+  const physVals = [localStats.force ?? 1, localStats.vitesse ?? 1, localStats.resistance ?? 1, localStats.technique ?? 1];
   const hasChanges = totalSpent !== 0;
 
   return (
@@ -699,7 +699,7 @@ export default function App() {
   );
 }
 
-// ─── STYLES ───────────────────────────────────────────────────────────────────
+// ─── STYLES ───────────────────────────────────────────────────────────
 const S = {
   root: { minHeight: '100vh', background: '#0d0a06', color: '#e0d5c5', fontFamily: "'Cinzel', serif", position: 'relative', overflow: 'hidden' },
   bgAccent: { position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', transition: 'background 1s' },
