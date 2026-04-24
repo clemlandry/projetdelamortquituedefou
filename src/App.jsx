@@ -81,6 +81,9 @@ async function fetchProfile(discordId) {
     nen_abilities:    Array.isArray(data.nen_abilities)    ? data.nen_abilities[0]    ?? {} : data.nen_abilities    ?? {},
     hatsu_affinities: Array.isArray(data.hatsu_affinities) ? data.hatsu_affinities[0] ?? {} : data.hatsu_affinities ?? {},
     techniques:       Array.isArray(data.techniques)       ? data.techniques               : [],
+    nen_reserve: data.nen_reserve ?? 0,
+    nen_points: data.nen_points ?? 0,
+    affinity_points: data.affinity_points ?? 0,
   };
 }
 
@@ -127,7 +130,8 @@ function HatsuStar({ hatsu, nenType }) {
   const angle = useCallback((i) => (Math.PI * 2 * i) / n - Math.PI / 2, []);
   const dataPoints = useMemo(() =>
     HATSU_BRANCHES.map((b, i) => {
-      const ratio = RANK_RATIO[hatsu?.[b.key] || 'E'] ?? (1 / RANKS.length);
+      const rank = hatsu?.[b.key] || 'E';
+      const ratio = rank === '✖' ? 0 : (RANK_RATIO[rank] ?? (1 / RANKS.length));
       return { x: cx + r * ratio * Math.cos(angle(i)), y: cy + r * ratio * Math.sin(angle(i)) };
     }), [hatsu, angle]);
   const polygon    = dataPoints.map(p => `${p.x},${p.y}`).join(' ');
@@ -177,21 +181,25 @@ function HatsuStar({ hatsu, nenType }) {
   );
 }
 
-// ─── NenMasteryBar ────────────────────────────────────────────────────────────
-function NenMasteryBar({ mastery, color }) {
-  const locked = mastery === 0;
+// ─── NenResourceBars ──────────────────────────────────────────────────────────
+function NenResourceBars({ reserve, points, affinityPoints, color }) {
+  const maxPoints = Math.max(0, (reserve || 0) * 10);
+  const safePoints = Math.max(0, Math.min(points || 0, maxPoints));
+  const ratio = maxPoints > 0 ? safePoints / maxPoints : 0;
   return (
     <div style={{ width: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <span style={{ fontSize: 11, color: '#c4b89a', fontFamily: "'Cinzel', serif", letterSpacing: 2, textTransform: 'uppercase' }}>Maîtrise du Nen</span>
-        <span style={{ fontSize: 13, fontFamily: 'monospace', color: locked ? '#444' : color, fontWeight: 'bold' }}>
-          {locked ? 'Non débloqué' : `${mastery} / 10`}
+        <span style={{ fontSize: 11, color: '#c4b89a', fontFamily: "'Cinzel', serif", letterSpacing: 2, textTransform: 'uppercase' }}>Ressources Nen</span>
+        <span style={{ fontSize: 13, fontFamily: 'monospace', color, fontWeight: 'bold' }}>
+          {safePoints} / {maxPoints}
         </span>
       </div>
-      <div style={{ display: 'flex', gap: 3 }}>
-        {Array.from({ length: 10 }).map((_, i) => (
-          <div key={i} style={{ flex: 1, height: 6, borderRadius: 2, background: i < mastery ? color : '#2a2010', opacity: i < mastery ? (0.4 + (i / 10) * 0.6) : 1 }} />
-        ))}
+      <div style={{ width: '100%', height: 8, borderRadius: 3, background: '#2a2010', overflow: 'hidden', marginBottom: 8 }}>
+        <div style={{ width: `${ratio * 100}%`, height: '100%', background: color, transition: 'width 0.2s' }} />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#c4b89a' }}>
+        <span>Réserve: <b style={{ color: '#e0d5c5' }}>{reserve || 0}</b></span>
+        <span>Points d'affinité: <b style={{ color: '#e0d5c5' }}>{affinityPoints || 0}</b></span>
       </div>
     </div>
   );
@@ -329,11 +337,13 @@ export default function App() {
   }, [pointsLeft, isInfinitePoints]);
 
   const decStat = useCallback((k) => {
-    setLocalStats(prev => ((prev[k] || 0) <= MIN_STAT ? prev : { ...prev, [k]: prev[k] - 1 }));
-  }, []);
+    const base = profile?.stats?.[k] ?? MIN_STAT;
+    setLocalStats(prev => ((prev[k] || MIN_STAT) <= base ? prev : { ...prev, [k]: prev[k] - 1 }));
+  }, [profile?.stats]);
 
   const saveStats = async () => {
     if (!discordId) return;
+    if (totalSpent <= 0) return;
     setSaving(true);
     try {
       await db.update('stats', localStats, { 'discord_id': `eq.${discordId}` });
@@ -412,14 +422,21 @@ export default function App() {
             <div style={S.infoRow}><span>📍</span><span>{profile.location || 'Inconnu'}</span></div>
             <div style={S.infoRow}><span>⭐</span><span>Réputation : {profile.reputation}</span></div>
             <div style={S.jenny}>💰 {profile.jenny?.toLocaleString()} Jenny</div>
-            <div style={S.infoRow}><span>📊</span><span>Niv. {profile.level} — {profile.xp} XP</span></div>
-            <button onClick={() => { setEditData({ char_name: profile.char_name, char_surname: profile.char_surname, nen_type: profile.nen_type }); setEditing(true); }}
+            <div style={S.infoRow}><span>📊</span><span>Niv. {profile.level} : {profile.xp} XP</span></div>
+            <button onClick={() => { setEditData({ char_name: profile.char_name, char_surname: profile.char_surname }); setEditing(true); }}
               style={{ ...S.editBtn, borderColor: nenColor + '60', color: nenColor }}>✦ Modifier</button>
           </div>
         </div>
 
-        {/* MAÎTRISE NEN */}
-        <div style={S.section}><NenMasteryBar mastery={profile.nen_mastery} color={nenColor} /></div>
+        {/* RESSOURCES NEN */}
+        <div style={S.section}>
+          <NenResourceBars
+            reserve={profile.nen_reserve}
+            points={profile.nen_points}
+            affinityPoints={profile.affinity_points}
+            color={nenColor}
+          />
+        </div>
 
         {/* TECHNIQUES DE BASE */}
         <div style={S.section}><NenAbilitiesGrid abilities={profile.nen_abilities} color={nenColor} /></div>
@@ -457,7 +474,8 @@ export default function App() {
             {[['force', 'Force'], ['vitesse', 'Vitesse'], ['resistance', 'Résistance'], ['technique', 'Technique']].map(([k, l]) => (
               <StatRow key={k} label={l} value={localStats[k] || MIN_STAT}
                 onInc={() => incStat(k)} onDec={() => decStat(k)} color="#e85d04"
-                canInc={isInfinitePoints || pointsLeft > 0} canDec={(localStats[k] || MIN_STAT) > MIN_STAT} />
+                canInc={isInfinitePoints || pointsLeft > 0}
+                canDec={(localStats[k] || MIN_STAT) > (profile?.stats?.[k] ?? MIN_STAT)} />
             ))}
           </div>
         </div>
@@ -482,10 +500,6 @@ export default function App() {
             <input style={S.input} value={editData.char_name || ''} onChange={e => setEditData(p => ({ ...p, char_name: e.target.value }))} placeholder="Prénom" />
             <label style={S.label}>Nom</label>
             <input style={S.input} value={editData.char_surname || ''} onChange={e => setEditData(p => ({ ...p, char_surname: e.target.value }))} placeholder="Nom de famille" />
-            <label style={S.label}>Type de Nen</label>
-            <select style={S.input} value={editData.nen_type || 'Inconnu'} onChange={e => setEditData(p => ({ ...p, nen_type: e.target.value }))}>
-              {NEN_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
             <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
               <button onClick={() => setEditing(false)} style={{ ...S.editBtn, flex: 1, borderColor: '#333', color: '#666' }}>Annuler</button>
               <button onClick={saveCharacter} disabled={saving} style={{ ...S.editBtn, flex: 1, borderColor: nenColor, color: nenColor }}>
