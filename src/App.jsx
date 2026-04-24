@@ -41,7 +41,7 @@ const RANK_RATIO = Object.fromEntries(RANKS.map((r, i) => [r, (i + 1) / RANKS.le
 
 const NEN_COLORS = {
   Inconnu: '#888', Renforceur: '#e85d04', Émetteur: '#4cc9f0',
-  Transformateur: '#7b2fff', Manipulateur: '#2dc653', Matérialisateur: '#f72585', Spécialiste: '#ffd60a',
+  Transformateur: '#7b2fff', Manipulateur: '#2dc653', Matérialiseur: '#f72585', Spécialiste: '#ffd60a',
 };
 
 const NEN_TYPES = ['Inconnu', 'Renforceur', 'Émetteur', 'Transformateur', 'Manipulateur', 'Matérialisateur', 'Spécialiste'];
