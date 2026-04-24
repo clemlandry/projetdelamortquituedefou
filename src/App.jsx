@@ -75,7 +75,7 @@ const proxyImg = (url) => (url && url.trim()) ? `/api/image?url=${encodeURICompo
 
 async function fetchProfile(discordId) {
   const rows = await db.select('players', {
-    select: '*, stats(*), techniques(*), nen_abilities(*), hatsu_affinities(*)',
+    select: '*, stats(*), nen_abilities(*), hatsu_affinities(*)',
     filters: { 'discord_id': `eq.${discordId}` },
   });
   if (!rows || rows.length === 0) throw new Error('Joueur introuvable.');
@@ -85,11 +85,19 @@ async function fetchProfile(discordId) {
     stats:            Array.isArray(data.stats)            ? data.stats[0]            ?? {} : data.stats            ?? {},
     nen_abilities:    Array.isArray(data.nen_abilities)    ? data.nen_abilities[0]    ?? {} : data.nen_abilities    ?? {},
     hatsu_affinities: Array.isArray(data.hatsu_affinities) ? data.hatsu_affinities[0] ?? {} : data.hatsu_affinities ?? {},
-    techniques:       Array.isArray(data.techniques)       ? data.techniques               : [],
+    techniques: [],
     nen_reserve: data.nen_reserve ?? 0,
     nen_points: data.nen_points ?? 0,
     affinity_points: data.affinity_points ?? 0,
   };
+}
+
+async function fetchTechniques(discordId) {
+  const rows = await db.select('techniques', {
+    select: '*',
+    filters: { 'discord_id': `eq.${discordId}` },
+  });
+  return Array.isArray(rows) ? rows : [];
 }
 
 // ─── Radar Chart ──────────────────────────────────────────────────────────────
@@ -279,9 +287,42 @@ export default function App() {
   const [imageHover, setImageHover]       = useState(false);
   const [imageEditMode, setImageEditMode] = useState(false);
   const [newImageUrl, setNewImageUrl]     = useState('');
+  const [techniquesLoading, setTechniquesLoading] = useState(false);
+
+  const cacheKey = useMemo(
+    () => discordId ? `hxh_profile_cache_${discordId}` : null,
+    [discordId]
+  );
+
+  const loadTechniques = useCallback(async (userId) => {
+    if (!userId) return;
+    setTechniquesLoading(true);
+    try {
+      const list = await fetchTechniques(userId);
+      setProfile(prev => (prev ? { ...prev, techniques: list } : prev));
+    } finally {
+      setTechniquesLoading(false);
+    }
+  }, []);
+
+  const hydrateFromRemote = useCallback(async (userId, username) => {
+    await db.upsert('players', { discord_id: userId, username }, { onConflict: 'discord_id', ignoreDuplicates: true });
+    await Promise.all([
+      db.upsert('stats',            { discord_id: userId }, { onConflict: 'discord_id', ignoreDuplicates: true }),
+      db.upsert('nen_abilities',    { discord_id: userId }, { onConflict: 'discord_id', ignoreDuplicates: true }),
+      db.upsert('hatsu_affinities', { discord_id: userId }, { onConflict: 'discord_id', ignoreDuplicates: true }),
+    ]);
+
+    const p = await fetchProfile(userId);
+    setProfile(prev => ({ ...p, techniques: prev?.techniques ?? [] }));
+    setLocalStats({ ...p.stats });
+    setLocalReserve(p.nen_reserve ?? 0);
+    void loadTechniques(userId);
+  }, [loadTechniques]);
 
   useEffect(() => {
     async function setup() {
+      let renderedFromCache = false;
       try {
         const isInDiscord = window.location.search.includes('frame_id');
         if (!isInDiscord) {
@@ -316,29 +357,40 @@ export default function App() {
         const user = await userRes.json();
         setDiscordId(user.id);
 
-        // Auto-register
-        await db.upsert('players',
-          { discord_id: user.id, username: user.username },
-          { onConflict: 'discord_id', ignoreDuplicates: true }
-        );
-        await Promise.all([
-          db.upsert('stats',            { discord_id: user.id }, { onConflict: 'discord_id', ignoreDuplicates: true }),
-          db.upsert('nen_abilities',    { discord_id: user.id }, { onConflict: 'discord_id', ignoreDuplicates: true }),
-          db.upsert('hatsu_affinities', { discord_id: user.id }, { onConflict: 'discord_id', ignoreDuplicates: true }),
-        ]);
+        const rawCached = sessionStorage.getItem(`hxh_profile_cache_${user.id}`);
+        if (rawCached) {
+          try {
+            const cached = JSON.parse(rawCached);
+            if (cached && typeof cached === 'object') {
+              setProfile(cached);
+              setLocalStats({ ...(cached.stats ?? {}) });
+              setLocalReserve(cached.nen_reserve ?? 0);
+              renderedFromCache = true;
+              setLoading(false);
+            }
+          } catch {
+            // Cache invalide: on ignore et on recharge depuis le serveur.
+          }
+        }
 
-        const p = await fetchProfile(user.id);
-        setProfile(p);
-        setLocalStats({ ...p.stats });
-        setLocalReserve(p.nen_reserve ?? 0);
+        if (renderedFromCache) {
+          void hydrateFromRemote(user.id, user.username).catch((err) => setError(err.message));
+        } else {
+          await hydrateFromRemote(user.id, user.username);
+        }
       } catch (err) {
         setError(err.message);
       } finally {
-        setLoading(false);
+        if (!renderedFromCache) setLoading(false);
       }
     }
     setup();
-  }, []);
+  }, [hydrateFromRemote]);
+
+  useEffect(() => {
+    if (!cacheKey || !profile) return;
+    sessionStorage.setItem(cacheKey, JSON.stringify(profile));
+  }, [cacheKey, profile]);
 
   const nenColor = profile ? (NEN_COLORS[profile.nen_type] || '#888') : '#888';
   const MIN_STAT = 1;
@@ -385,9 +437,10 @@ export default function App() {
         await db.update('players', { stat_points: pointsLeft }, { 'discord_id': `eq.${discordId}` });
       }
       const updated = await fetchProfile(discordId);
-      setProfile(updated);
+      setProfile(prev => ({ ...updated, techniques: prev?.techniques ?? [] }));
       setLocalStats({ ...updated.stats });
       setLocalReserve(updated.nen_reserve ?? 0);
+      void loadTechniques(discordId);
     } finally {
       setSaving(false);
     }
@@ -408,7 +461,8 @@ export default function App() {
       await db.update('hatsu_affinities', { [key]: next }, { 'discord_id': `eq.${discordId}` });
       await db.update('players', { affinity_points: (profile.affinity_points ?? 0) - 1 }, { 'discord_id': `eq.${discordId}` });
       const updated = await fetchProfile(discordId);
-      setProfile(updated);
+      setProfile(prev => ({ ...updated, techniques: prev?.techniques ?? [] }));
+      void loadTechniques(discordId);
     } finally {
       setSavingAffinity(false);
     }
@@ -420,8 +474,9 @@ export default function App() {
     try {
       await db.update('players', editData, { 'discord_id': `eq.${discordId}` });
       const updated = await fetchProfile(discordId);
-      setProfile(updated);
+      setProfile(prev => ({ ...updated, techniques: prev?.techniques ?? [] }));
       setEditing(false);
+      void loadTechniques(discordId);
     } finally {
       setSaving(false);
     }
@@ -431,9 +486,10 @@ export default function App() {
     if (!newImageUrl.trim() || !discordId) return;
     await db.update('players', { char_image: newImageUrl.trim() }, { 'discord_id': `eq.${discordId}` });
     const updated = await fetchProfile(discordId);
-    setProfile(updated);
+    setProfile(prev => ({ ...updated, techniques: prev?.techniques ?? [] }));
     setImageEditMode(false);
     setNewImageUrl('');
+    void loadTechniques(discordId);
   };
 
   if (loading) return (
@@ -499,20 +555,24 @@ export default function App() {
         <div style={S.section}><NenAbilitiesGrid abilities={profile.nen_abilities} color={nenColor} /></div>
 
         {/* TECHNIQUES RP */}
-        {profile.techniques?.length > 0 && (
+        {(techniquesLoading || profile.techniques?.length > 0) && (
           <div style={S.section}>
             <div style={S.sectionTitle}>Techniques</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {profile.techniques.map(t => (
-                <div key={t.id} style={{ ...S.listItem, borderColor: nenColor + '30' }}>
-                  <span style={{ color: nenColor, marginRight: 8, fontSize: 10 }}>◆</span>
-                  <div>
-                    <div style={{ fontSize: 13 }}>{t.name}</div>
-                    {t.description && <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{t.description}</div>}
+            {techniquesLoading ? (
+              <div style={{ color: '#888', fontSize: 12 }}>Chargement des techniques...</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {profile.techniques.map(t => (
+                  <div key={t.id} style={{ ...S.listItem, borderColor: nenColor + '30' }}>
+                    <span style={{ color: nenColor, marginRight: 8, fontSize: 10 }}>◆</span>
+                    <div>
+                      <div style={{ fontSize: 13 }}>{t.name}</div>
+                      {t.description && <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{t.description}</div>}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
