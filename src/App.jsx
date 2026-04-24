@@ -274,6 +274,9 @@ const btnStyle = (color, disabled) => ({
 });
 
 function StatRow({ label, value, onInc, onDec, color, canInc, canDec }) {
+  const STAT_MAX = 5250;
+  const statPercentage = Math.min((value / STAT_MAX) * 100, 100);
+  
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
       <div style={{ fontSize: 16, fontWeight: 600, color: '#c4b89a', fontFamily: "'Cinzel', serif", letterSpacing: 1, width: 110, minWidth: 110, flexShrink: 0, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>{label}</div>
@@ -281,7 +284,7 @@ function StatRow({ label, value, onInc, onDec, color, canInc, canDec }) {
       <div style={{ width: 40, height: 36, boxSizing: 'border-box', textAlign: 'center', fontSize: 18, fontWeight: 'bold', color: '#fff', fontFamily: 'monospace', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{value}</div>
       <button onClick={onInc} disabled={!canInc} style={btnStyle(color, !canInc)}>+</button>
       <div style={{ flex: 1, height: 6, background: '#2a2010', borderRadius: 3, overflow: 'hidden', minWidth: 40, alignSelf: 'center' }}>
-        <div style={{ width: `${Math.min(value, 100)}%`, height: '100%', background: color, borderRadius: 3, transition: 'width 0.2s' }} />
+        <div style={{ width: `${statPercentage}%`, height: '100%', background: color, borderRadius: 3, transition: 'width 0.2s' }} />
       </div>
     </div>
   );
