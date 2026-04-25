@@ -615,7 +615,7 @@ export default function App() {
     </div>
   );
 
-  const physLabels = ['Force', 'Vitesse', 'Rés.', 'Tech.'];
+  const physLabels = ['Force', '  Vitesse', 'Rés. ', 'Tech.'];
   const physVals = [localStats.force ?? 1, localStats.vitesse ?? 1, localStats.resistance ?? 1, localStats.technique ?? 1];
   const hasChanges = totalSpent !== 0;
 
