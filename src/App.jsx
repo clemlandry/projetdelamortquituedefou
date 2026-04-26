@@ -1,5 +1,5 @@
 import { DiscordSDK } from '@discord/embedded-app-sdk';
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 
 // ─── Spinner keyframes ─────────────────────────────────────────────────
 const spinnerStyle = document.createElement('style');
@@ -124,10 +124,7 @@ async function fetchTechniques(discordId) {
 }
 
 // ─── Radar Chart ───────────────────────────────────────────────────────
-// FIX: réduit r 75→58, viewBox 200→220, cx/cy 100→110 pour éviter que les labels débordent
-// FIX: labels plus grands (12→14) et plus contrastés (blanc opaque)
 function RadarChart({ labels, values, color, title }) {
-  // Taille augmentée à 280 pour plus d'espace aux labels gauche/droite
   const size = 280, cx = 140, cy = 140, r = 75, n = labels.length, levels = 5;
   const angle = useCallback((i) => (Math.PI * 2 * i) / n - Math.PI / 2, [n]);
   const maxVal = Math.max(...values, 1);
@@ -156,7 +153,6 @@ function RadarChart({ labels, values, color, title }) {
         <polygon points={polygon} fill={color} fillOpacity={0.18} stroke={color} strokeWidth={2} strokeOpacity={0.9} />
         {dataPoints.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={3} fill={color} />)}
         {Array.from({ length: n }).map((_, i) => {
-          // FIX: offset ajusté r+18→r+20 pour éviter que les labels gauche/droite ne soient trop proches
           const lx = cx + (r + 20) * Math.cos(angle(i));
           const ly = cy + (r + 20) * Math.sin(angle(i));
           return (
@@ -172,10 +168,7 @@ function RadarChart({ labels, values, color, title }) {
 }
 
 // ─── HatsuStar ─────────────────────────────────────────────────────────
-// FIX: réduit r 85→68, viewBox 240→270, cx/cy 120→135 pour que les labels ne débordent plus
-// FIX: labels plus lisibles (fontSize 12→14, opacity inactifs 0.55→0.78)
 function HatsuStar({ hatsu, nenType, pendingKey, pendingNext }) {
-  // Taille augmentée : size 270→320, r 68→85, cx/cy 135→160
   const size = 320, cx = 160, cy = 160, r = 85, n = 6, levels = RANKS.length;
 
   const angle = useCallback((i) => (Math.PI * 2 * i) / n - Math.PI / 2, [n]);
@@ -243,7 +236,6 @@ function HatsuStar({ hatsu, nenType, pendingKey, pendingNext }) {
           return <circle key={i} cx={p.x} cy={p.y} r={3} fill="#c4b89a" fillOpacity={0.45} />;
         })}
         {HATSU_BRANCHES.map((b, i) => {
-          // FIX: offset label réduit r+28→r+22 pour rapprocher les labels du diagramme
           const lx = cx + (r + 22) * Math.cos(angle(i));
           const ly = cy + (r + 22) * Math.sin(angle(i));
           let rank;
@@ -327,6 +319,44 @@ function NenAbilitiesGrid({ abilities, color }) {
   );
 }
 
+// ─── useHoldAction ─────────────────────────────────────────────────────
+// Déclenche action() immédiatement au mousedown, puis accélère progressivement
+// tant que le bouton reste appuyé. S'arrête proprement au mouseup/mouseleave/touchend.
+function useHoldAction(action, { initialDelay = 400, minInterval = 40, acceleration = 0.82 } = {}) {
+  const timerRef = useRef(null);
+  const repeatRef = useRef(null);
+  const currentInterval = useRef(150);
+  const actionRef = useRef(action);
+  actionRef.current = action;
+
+  const stop = useCallback(() => {
+    clearTimeout(timerRef.current);
+    clearTimeout(repeatRef.current);
+    timerRef.current = null;
+    repeatRef.current = null;
+    currentInterval.current = 150;
+  }, []);
+
+  const start = useCallback(() => {
+    actionRef.current();
+    timerRef.current = setTimeout(function tick() {
+      actionRef.current();
+      currentInterval.current = Math.max(minInterval, currentInterval.current * acceleration);
+      repeatRef.current = setTimeout(tick, currentInterval.current);
+    }, initialDelay);
+  }, [initialDelay, minInterval, acceleration]);
+
+  useEffect(() => () => stop(), [stop]);
+
+  return {
+    onMouseDown: start,
+    onMouseUp: stop,
+    onMouseLeave: stop,
+    onTouchStart: (e) => { e.preventDefault(); start(); },
+    onTouchEnd: stop,
+  };
+}
+
 // ─── StatRow ───────────────────────────────────────────────────────────
 const btnStyle = (color, disabled) => ({
   width: 36, height: 36,
@@ -344,17 +374,31 @@ const btnStyle = (color, disabled) => ({
   lineHeight: 1,
   opacity: disabled ? 0.4 : 1,
   flexShrink: 0,
+  userSelect: 'none',
+  WebkitUserSelect: 'none',
 });
 
 function StatRow({ label, value, onInc, onDec, color, canInc, canDec }) {
   const STAT_MAX = 1200;
   const statPercentage = Math.min((value / STAT_MAX) * 100, 100);
+
+  const incHandlers = useHoldAction(onInc);
+  const decHandlers = useHoldAction(onDec);
+
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
       <div style={{ fontSize: 16, fontWeight: 600, color: '#c4b89a', fontFamily: "'Cinzel', serif", letterSpacing: 1, width: 110, minWidth: 110, flexShrink: 0, textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>{label}</div>
-      <button onClick={onDec} disabled={!canDec} style={btnStyle(color, !canDec)}>-</button>
+      <button
+        {...(canDec ? decHandlers : {})}
+        disabled={!canDec}
+        style={btnStyle(color, !canDec)}
+      >-</button>
       <div style={{ width: 40, height: 36, boxSizing: 'border-box', textAlign: 'center', fontSize: 18, fontWeight: 'bold', color: '#fff', fontFamily: 'monospace', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{value}</div>
-      <button onClick={onInc} disabled={!canInc} style={btnStyle(color, !canInc)}>+</button>
+      <button
+        {...(canInc ? incHandlers : {})}
+        disabled={!canInc}
+        style={btnStyle(color, !canInc)}
+      >+</button>
       <div style={{ flex: 1, height: 6, background: '#2a2010', borderRadius: 3, overflow: 'hidden', minWidth: 40, alignSelf: 'center' }}>
         <div style={{ width: `${statPercentage}%`, height: '100%', background: color, borderRadius: 3, transition: 'width 0.2s' }} />
       </div>
@@ -689,7 +733,7 @@ export default function App() {
           </span>
         </div>
 
-        {/* STATS — le wrapper SVG a une largeur fixe (220px = taille SVG) ; les barres prennent le reste */}
+        {/* STATS */}
         <div style={{ ...S.statBlock, flexDirection: isWideScreen ? 'row' : 'column', alignItems: isWideScreen ? 'flex-start' : 'stretch', gap: isWideScreen ? 18 : 0 }}>
           <div style={{ display: 'flex', justifyContent: 'center', width: isWideScreen ? 280 : '100%', flexShrink: 0 }}>
             <RadarChart labels={physLabels} values={physVals} color="#e85d04" title="Physique" />
@@ -718,7 +762,7 @@ export default function App() {
           </button>
         )}
 
-        {/* HATSU — FIX alignement: même wrapper centré que le statBlock stats */}
+        {/* HATSU */}
         <div style={{ ...S.statBlock, marginTop: 12, flexDirection: isWideScreen ? 'row' : 'column', alignItems: isWideScreen ? 'flex-start' : 'stretch', gap: isWideScreen ? 18 : 0 }}>
           <div style={{ display: 'flex', justifyContent: 'center', width: isWideScreen ? 'auto' : '100%' }}>
             <HatsuStar hatsu={profile.hatsu_affinities} nenType={profile.nen_type} pendingKey={pendingAffinity?.key} pendingNext={pendingAffinity?.next} />
@@ -831,16 +875,14 @@ const S = {
   jenny: { fontSize: 13, color: '#ffd60a', letterSpacing: 1 },
   editBtn: { background: 'transparent', border: '1px solid', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontSize: 11, letterSpacing: 1, fontFamily: "'Cinzel', serif", width: 'fit-content' },
   section: { marginBottom: 12, padding: '14px 16px', background: '#ffffff05', borderRadius: 12, border: 'none' },
-  // FIX: sectionTitle plus lisible — fontSize 11→13, letterSpacing 3→2, opacity 0.7→0.9
   sectionTitle: { fontSize: 13, letterSpacing: 2, textTransform: 'uppercase', color: '#c4b89a', opacity: 0.9, marginBottom: 10 },
   listItem: { display: 'flex', alignItems: 'flex-start', padding: '6px 10px', background: '#ffffff04', borderRadius: 6, border: '1px solid' },
   pointsBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', margin: '12px 0', background: '#ffffff06', borderRadius: 8, border: 'none' },
-  // FIX: alignItems stretch en mobile pour que les wrappers SVG prennent bien toute la largeur
   statBlock: { background: '#ffffff05', borderRadius: 12, border: 'none', padding: 14, display: 'flex', flexDirection: 'column', alignItems: 'stretch' },
   saveBtn: { width: '100%', marginTop: 12, background: '#ffd60a0d', border: '1px solid', borderRadius: 8, padding: '12px', cursor: 'pointer', fontSize: 13, letterSpacing: 2, fontFamily: "'Cinzel', serif" },
   modalBg: { position: 'fixed', inset: 0, background: '#000000b0', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, backdropFilter: 'blur(4px)' },
   modal: { background: '#0f0c08', border: '1px solid #ffffff15', borderRadius: 14, padding: 24, width: '90%', maxWidth: 340 },
   modalTitle: { margin: '0 0 20px', fontSize: 16, color: '#e0d5c5', letterSpacing: 2 },
   label: { display: 'block', fontSize: 11, color: '#666', letterSpacing: 1, marginBottom: 6, marginTop: 12, textTransform: 'uppercase' },
-  input: { width: '100%', background: '#1a1208', border: '1px solid #ffffff15', borderRadius: 6, padding: '8p<x 10px', color: '#e0d5c5', fontFamily: "'Cinzel', serif", fontSize: 13, boxSizing: 'border-box', outline: 'none' },
+  input: { width: '100%', background: '#1a1208', border: '1px solid #ffffff15', borderRadius: 6, padding: '8px 10px', color: '#e0d5c5', fontFamily: "'Cinzel', serif", fontSize: 13, boxSizing: 'border-box', outline: 'none' },
 };
