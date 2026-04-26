@@ -347,7 +347,7 @@ const btnStyle = (color, disabled) => ({
 });
 
 function StatRow({ label, value, onInc, onDec, color, canInc, canDec }) {
-  const STAT_MAX = 5250;
+  const STAT_MAX = 1200;
   const statPercentage = Math.min((value / STAT_MAX) * 100, 100);
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
