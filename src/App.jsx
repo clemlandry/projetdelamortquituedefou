@@ -498,10 +498,10 @@ export default function App() {
   const [imageUrlError, setImageUrlError] = useState('');
   const [techniquesLoading, setTechniquesLoading] = useState(false);
   const [dailyXp, setDailyXp] = useState(0);
-  const [isWideScreen, setIsWideScreen] = useState(window.innerWidth >= 640);
+  const [isWideScreen, setIsWideScreen] = useState(window.innerWidth >= 1024);
 
   useEffect(() => {
-    const handler = () => setIsWideScreen(window.innerWidth >= 640);
+    const handler = () => setIsWideScreen(window.innerWidth >= 1024);
     window.addEventListener('resize', handler);
     return () => window.removeEventListener('resize', handler);
   }, []);
@@ -753,7 +753,7 @@ export default function App() {
         backgroundSize: '40px 40px',
       }} />
 
-      <div style={{ position: 'relative', zIndex: 1, maxWidth: 640, margin: '0 auto', paddingBottom: 40 }}>
+      <div style={{ position: 'relative', zIndex: 1, maxWidth: 1200, margin: '0 auto', paddingBottom: 40 }}>
 
         {/* ── HEADER BAND ── */}
         <div style={{ background: 'linear-gradient(180deg, #0d1e2e 0%, #091420 100%)', borderBottom: '1px solid #1a2d40', padding: '10px 14px 0' }}>
