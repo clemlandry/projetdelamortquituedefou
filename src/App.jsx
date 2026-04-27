@@ -516,50 +516,77 @@ export default function App() {
     }
   }, []);
 
-  const hydrateFromRemote = useCallback(async (id, username) => {
-    const data = await fetchProfile(id);
-    setProfile(data);
-    setLocalStats({ ...data.stats });
-    setLocalReserve(data.nen_reserve ?? 0);
-    setLoading(false);
-    void loadTechniques(id);
+  const hydrateFromRemote = useCallback(async (userId, username) => {
+    await db.upsert('players', { discord_id: userId, username }, { onConflict: 'discord_id', ignoreDuplicates: true });
+    await Promise.all([
+      db.upsert('stats', { discord_id: userId }, { onConflict: 'discord_id', ignoreDuplicates: true }),
+      db.upsert('nen_abilities', { discord_id: userId }, { onConflict: 'discord_id', ignoreDuplicates: true }),
+      db.upsert('hatsu_affinities', { discord_id: userId }, { onConflict: 'discord_id', ignoreDuplicates: true }),
+    ]);
+    const p = await fetchProfile(userId);
+    setProfile(prev => ({ ...p, techniques: prev?.techniques ?? [] }));
+    setLocalStats({ ...p.stats });
+    setLocalReserve(p.nen_reserve ?? 0);
+
+    const today = new Date().toISOString().slice(0, 10);
+    const dailyRows = await db.select('rp_daily_xp', {
+      select: 'xp_earned',
+      filters: { discord_id: `eq.${userId}`, date: `eq.${today}` },
+    }).catch(() => []);
+    setDailyXp(dailyRows?.[0]?.xp_earned ?? 0);
+
+    void loadTechniques(userId);
   }, [loadTechniques]);
 
-  const cacheKey = discordId ? `hxh_profile_${discordId}` : null;
+  const cacheKey = useMemo(() => discordId ? `hxh_profile_cache_${discordId}` : null, [discordId]);
 
   useEffect(() => {
     async function setup() {
+      let renderedFromCache = false;
       try {
-        const sdk = new DiscordSDK(import.meta.env.VITE_DISCORD_CLIENT_ID);
+        const isInDiscord = window.location.search.includes('frame_id');
+        if (!isInDiscord) {
+          setError('Cette application doit être lancée depuis Discord.');
+          setLoading(false);
+          return;
+        }
+
+        const sdk = new DiscordSDK(import.meta.env.VITE_CLIENT_ID);
         await sdk.ready();
+
         const { code } = await sdk.commands.authorize({
-          client_id: import.meta.env.VITE_DISCORD_CLIENT_ID,
+          client_id: import.meta.env.VITE_CLIENT_ID,
           response_type: 'code',
-          state: '',
           prompt: 'none',
-          scope: ['identify', 'guilds'],
+          scope: ['identify'],
         });
-        const res = await fetch('/api/token', {
+
+        const tokenRes = await fetch('/api/token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ code }),
         });
-        const { access_token } = await res.json();
-        const auth = await sdk.commands.authenticate({ access_token });
-        const user = auth.user;
+        if (!tokenRes.ok) throw new Error('Échec du token.');
+        const { access_token } = await tokenRes.json();
+        await sdk.commands.authenticate({ access_token });
+
+        const userRes = await fetch('https://discord.com/api/v10/users/@me', {
+          headers: { Authorization: `Bearer ${access_token}` },
+        });
+        if (!userRes.ok) throw new Error("Impossible de récupérer l'utilisateur Discord.");
+        const user = await userRes.json();
         setDiscordId(user.id);
 
-        let renderedFromCache = false;
-        if (cacheKey) {
+        const rawCached = safeSession.getItem(`hxh_profile_cache_${user.id}`);
+        if (rawCached) {
           try {
-            const cached = safeSession.getItem(`hxh_profile_${user.id}`);
-            if (cached) {
-              const parsed = JSON.parse(cached);
-              setProfile(parsed);
-              setLocalStats({ ...parsed.stats });
-              setLocalReserve(parsed.nen_reserve ?? 0);
-              setLoading(false);
+            const cached = JSON.parse(rawCached);
+            if (cached && typeof cached === 'object') {
+              setProfile(cached);
+              setLocalStats({ ...(cached.stats ?? {}) });
+              setLocalReserve(cached.nen_reserve ?? 0);
               renderedFromCache = true;
+              setLoading(false);
             }
           } catch {}
         }
@@ -572,7 +599,7 @@ export default function App() {
       } catch (err) {
         setError(err.message);
       } finally {
-        setLoading(false);
+        if (!renderedFromCache) setLoading(false);
       }
     }
     setup();
