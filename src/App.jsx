@@ -41,6 +41,20 @@ const db = {
 };
 
 // ─── Constantes ────────────────────────────────────────────────────────
+// ─── Constantes XP ─────────────────────────────────────────────────────
+const LEVEL_CAP   = 250;
+const DAILY_XP_CAP = 20;
+
+function xpRequired(level, limitbreak = false) {
+  if (!limitbreak) {
+    return 20 + Math.floor(level / 10) * 5;
+  }
+  return 40 + Math.floor((level - LEVEL_CAP) / 10) * 5;
+}
+
+// ─── Constante limite de stats ──────────────────────────────────────────
+const STAT_LIMIT = 1050; // max avant limitbreak
+
 const RANKS = ['E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS', 'Z'];
 const RANK_RATIO = Object.fromEntries(RANKS.map((r, i) => [r, (i + 1) / RANKS.length]));
 const getNextRank = (rank) => {
@@ -378,9 +392,11 @@ const btnStyle = (color, disabled) => ({
   WebkitUserSelect: 'none',
 });
 
-function StatRow({ label, value, onInc, onDec, color, canInc, canDec }) {
-  const STAT_MAX = 1200;
+function StatRow({ label, value, onInc, onDec, color, canInc, canDec, limitbreak }) {
+  const STAT_MAX    = 1200;
+  const limitRatio  = STAT_LIMIT / STAT_MAX; // position du trait limite (~87.5%)
   const statPercentage = Math.min((value / STAT_MAX) * 100, 100);
+  const atLimit = !limitbreak && value >= STAT_LIMIT;
 
   const incHandlers = useHoldAction(onInc);
   const decHandlers = useHoldAction(onDec);
@@ -393,14 +409,26 @@ function StatRow({ label, value, onInc, onDec, color, canInc, canDec }) {
         disabled={!canDec}
         style={btnStyle(color, !canDec)}
       >-</button>
-      <div style={{ width: 40, height: 36, boxSizing: 'border-box', textAlign: 'center', fontSize: 18, fontWeight: 'bold', color: '#fff', fontFamily: 'monospace', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{value}</div>
+      <div style={{ width: 40, height: 36, boxSizing: 'border-box', textAlign: 'center', fontSize: 18, fontWeight: 'bold', color: atLimit ? '#f72585' : '#fff', fontFamily: 'monospace', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{value}</div>
       <button
         {...(canInc ? incHandlers : {})}
         disabled={!canInc}
         style={btnStyle(color, !canInc)}
       >+</button>
-      <div style={{ flex: 1, height: 6, background: '#2a2010', borderRadius: 3, overflow: 'hidden', minWidth: 40, alignSelf: 'center' }}>
-        <div style={{ width: `${statPercentage}%`, height: '100%', background: color, borderRadius: 3, transition: 'width 0.2s' }} />
+      {/* Barre avec trait limite */}
+      <div style={{ flex: 1, height: 6, background: '#2a2010', borderRadius: 3, position: 'relative', minWidth: 40, alignSelf: 'center' }}>
+        <div style={{ width: `${statPercentage}%`, height: '100%', background: atLimit ? '#f72585' : color, borderRadius: 3, transition: 'width 0.2s' }} />
+        {/* Trait limite à 1050 */}
+        {!limitbreak && (
+          <div style={{
+            position: 'absolute',
+            left: `${limitRatio * 100}%`,
+            top: -3, bottom: -3,
+            width: 2,
+            background: '#f7258588',
+            borderRadius: 1,
+          }} />
+        )}
       </div>
     </div>
   );
@@ -425,6 +453,7 @@ export default function App() {
   const [imageUrlError, setImageUrlError] = useState('');
   const [techniquesLoading, setTechniquesLoading] = useState(false);
   const [isWideScreen, setIsWideScreen] = useState(false);
+  const [dailyXp, setDailyXp] = useState(0);
 
   const cacheKey = useMemo(
     () => discordId ? `hxh_profile_cache_${discordId}` : null,
@@ -453,6 +482,15 @@ export default function App() {
     setProfile(prev => ({ ...p, techniques: prev?.techniques ?? [] }));
     setLocalStats({ ...p.stats });
     setLocalReserve(p.nen_reserve ?? 0);
+
+    // Charge l'XP journalier
+    const today = new Date().toISOString().slice(0, 10);
+    const dailyRows = await db.select('rp_daily_xp', {
+      select: 'xp_earned',
+      filters: { discord_id: `eq.${userId}`, date: `eq.${today}` },
+    }).catch(() => []);
+    setDailyXp(dailyRows?.[0]?.xp_earned ?? 0);
+
     void loadTechniques(userId);
   }, [loadTechniques]);
 
@@ -552,8 +590,13 @@ export default function App() {
 
   const incStat = useCallback((k) => {
     if (!isInfinitePoints && pointsLeft <= 0) return;
-    setLocalStats(prev => ({ ...prev, [k]: (prev[k] || 0) + 1 }));
-  }, [pointsLeft, isInfinitePoints]);
+    const limitbreak = profile?.limitbreak ?? false;
+    setLocalStats(prev => {
+      const cur = prev[k] || 0;
+      if (!limitbreak && cur >= STAT_LIMIT) return prev;
+      return { ...prev, [k]: cur + 1 };
+    });
+  }, [pointsLeft, isInfinitePoints, profile?.limitbreak]);
 
   const decStat = useCallback((k) => {
     const base = profile?.stats?.[k] ?? MIN_STAT;
@@ -689,7 +732,35 @@ export default function App() {
             <div style={S.infoRow}><span>📍</span><span>{profile.location || 'Inconnu'}</span></div>
             <div style={S.infoRow}><span>⭐</span><span>Réputation : {profile.reputation}</span></div>
             <div style={S.jenny}>💰 {profile.jenny?.toLocaleString()} Jenny</div>
-            <div style={S.infoRow}><span>📊</span><span>Niv. {profile.level} : {profile.xp} XP</span></div>
+            {/* Barre d'XP */}
+            {(() => {
+              const lb = profile.limitbreak ?? false;
+              const needed = xpRequired(profile.level, lb);
+              const xpRatio = Math.min(profile.xp / needed, 1);
+              const isBlocked = !lb && profile.level >= LEVEL_CAP;
+              const xpColor = isBlocked ? '#f72585' : nenColor;
+              return (
+                <div style={{ width: '100%' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+                    <span style={{ fontSize: 11, color: '#c4b89a', letterSpacing: 2, textTransform: 'uppercase' }}>
+                      Niv. {profile.level}{lb ? ' ✦' : ''}
+                      {isBlocked ? <span style={{ color: '#f72585', marginLeft: 6, fontSize: 10 }}>BLOQUÉ</span> : null}
+                    </span>
+                    <span style={{ fontSize: 11, fontFamily: 'monospace', color: xpColor }}>
+                      {profile.xp} / {needed} XP
+                    </span>
+                  </div>
+                  <div style={{ width: '100%', height: 5, background: '#2a2010', borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{ width: `${xpRatio * 100}%`, height: '100%', background: xpColor, borderRadius: 3, transition: 'width 0.3s' }} />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3 }}>
+                    <span style={{ fontSize: 10, color: '#666', fontFamily: 'monospace' }}>
+                      XP aujourd'hui : <span style={{ color: dailyXp >= DAILY_XP_CAP ? '#f72585' : '#c4b89a' }}>{dailyXp}</span>/{DAILY_XP_CAP}
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
             <button onClick={() => { setEditData({ char_name: profile.char_name, char_surname: profile.char_surname }); setEditing(true); }}
               style={{ ...S.editBtn, borderColor: nenColor + '60', color: nenColor }}>✦ Modifier</button>
           </div>
@@ -742,8 +813,9 @@ export default function App() {
             {[['force', 'Force'], ['vitesse', 'Vitesse'], ['resistance', 'Résistance'], ['technique', 'Technique']].map(([k, l]) => (
               <StatRow key={k} label={l} value={localStats[k] || MIN_STAT}
                 onInc={() => incStat(k)} onDec={() => decStat(k)} color="#e85d04"
-                canInc={isInfinitePoints || pointsLeft > 0}
-                canDec={(localStats[k] || MIN_STAT) > (profile?.stats?.[k] ?? MIN_STAT)} />
+                canInc={(isInfinitePoints || pointsLeft > 0) && (profile?.limitbreak || (localStats[k] || MIN_STAT) < STAT_LIMIT)}
+                canDec={(localStats[k] || MIN_STAT) > (profile?.stats?.[k] ?? MIN_STAT)}
+                limitbreak={profile?.limitbreak ?? false} />
             ))}
             <StatRow
               label="Réserve Nen"
@@ -753,6 +825,7 @@ export default function App() {
               color="#4cc9f0"
               canInc={isInfinitePoints || pointsLeft > 0}
               canDec={(localReserve || 0) > (profile?.nen_reserve ?? 0)}
+              limitbreak={true}
             />
           </div>
         </div>
