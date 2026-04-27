@@ -738,7 +738,7 @@ export default function App() {
               const needed = xpRequired(profile.level, lb);
               const xpRatio = Math.min(profile.xp / needed, 1);
               const isBlocked = !lb && profile.level >= LEVEL_CAP;
-              const xpColor = isBlocked ? '#f72585' : nenColor;
+              const xpColor = isBlocked ? '#ff0000' : nenColor;
               return (
                 <div style={{ width: '100%' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
