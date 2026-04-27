@@ -336,7 +336,7 @@ function NenAbilitiesGrid({ abilities, color }) {
 // ─── useHoldAction ─────────────────────────────────────────────────────
 // Déclenche action() immédiatement au mousedown, puis accélère progressivement
 // tant que le bouton reste appuyé. S'arrête proprement au mouseup/mouseleave/touchend.
-function useHoldAction(action, { initialDelay = 400, minInterval = 40, acceleration = 0.82 } = {}) {
+function useHoldAction(action, { initialDelay = 400, minInterval = 10, acceleration = 0.82 } = {}) {
   const timerRef = useRef(null);
   const repeatRef = useRef(null);
   const currentInterval = useRef(150);
