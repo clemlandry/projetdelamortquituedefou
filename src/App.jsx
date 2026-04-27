@@ -396,7 +396,7 @@ function StatRow({ label, value, onInc, onDec, color, canInc, canDec, limitbreak
   const STAT_MAX    = 1200;
   const limitRatio  = STAT_LIMIT / STAT_MAX; // position du trait limite (~87.5%)
   const statPercentage = Math.min((value / STAT_MAX) * 100, 100);
-  const atLimit = !limitbreak && value >= STAT_LIMIT;
+  const atLimit = value >= STAT_LIMIT;
 
   const incHandlers = useHoldAction(onInc);
   const decHandlers = useHoldAction(onDec);
@@ -594,6 +594,7 @@ export default function App() {
     setLocalStats(prev => {
       const cur = prev[k] || 0;
       if (!limitbreak && cur >= STAT_LIMIT) return prev;
+      if (cur >= 1200) return prev; // plafond absolu même en limitbreak
       return { ...prev, [k]: cur + 1 };
     });
   }, [pointsLeft, isInfinitePoints, profile?.limitbreak]);
@@ -736,9 +737,10 @@ export default function App() {
             {(() => {
               const lb = profile.limitbreak ?? false;
               const needed = xpRequired(profile.level, lb);
-              const xpRatio = Math.min(profile.xp / needed, 1);
+              const xpInLevel = profile.xp % needed;
+              const xpRatio = Math.min(xpInLevel / needed, 1);
               const isBlocked = !lb && profile.level >= LEVEL_CAP;
-              const xpColor = isBlocked ? '#ff0000' : nenColor;
+              const xpColor = isBlocked ? '#ff0000' : lb ? '#ff4444' : nenColor;
               return (
                 <div style={{ width: '100%' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
@@ -747,7 +749,7 @@ export default function App() {
                       {isBlocked ? <span style={{ color: '#f72585', marginLeft: 6, fontSize: 10 }}>BLOQUÉ</span> : null}
                     </span>
                     <span style={{ fontSize: 11, fontFamily: 'monospace', color: xpColor }}>
-                      {profile.xp} / {needed} XP
+                      {xpInLevel} / {needed} XP
                     </span>
                   </div>
                   <div style={{ width: '100%', height: 5, background: '#2a2010', borderRadius: 3, overflow: 'hidden' }}>
