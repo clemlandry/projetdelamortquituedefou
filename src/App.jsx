@@ -1,6 +1,17 @@
 import { DiscordSDK } from '@discord/embedded-app-sdk';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 
+// Import rank images
+import erank from './Ressources/erank.png';
+import drank from './Ressources/drank.png';
+import crank from './Ressources/crank.png';
+import brank from './Ressources/brank.png';
+import arank from './Ressources/arank.png';
+import srank from './Ressources/srank.png';
+import ssrank from './Ressources/ssrank.png';
+import sssrank from './Ressources/sssrank.png';
+import zrank from './Ressources/zrank.png';
+
 // ─── Spinner keyframes ─────────────────────────────────────────────────
 const spinnerStyle = document.createElement('style');
 spinnerStyle.textContent = `@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`;
@@ -70,6 +81,18 @@ const NEN_COLORS = {
 };
 
 const NEN_TYPES = ['Inconnu', 'Renforceur', 'Émetteur', 'Transformateur', 'Manipulateur', 'Matérialisateur', 'Spécialiste'];
+
+const RANK_IMAGES = {
+  'E': erank,
+  'D': drank,
+  'C': crank,
+  'B': brank,
+  'A': arank,
+  'S': srank,
+  'SS': ssrank,
+  'SSS': sssrank,
+  'Z': zrank,
+};
 
 const HATSU_BRANCHES = [
   { key: 'renforcement', label: 'Renf.', nenType: 'Renforceur' },
@@ -264,6 +287,7 @@ function HatsuStar({ hatsu, nenType, pendingKey, pendingNext }) {
           const col = isPending ? pendingColor : (isActive ? activeColor : '#d4c8b0');
           const fontWeight = isPending || isActive ? 'bold' : '500';
           const opacity = isPending || isActive ? 1 : 0.78;
+          const rankImage = RANK_IMAGES[rank];
           return (
             <g key={i}>
               <text x={lx} y={ly - 9} textAnchor="middle" dominantBaseline="middle"
@@ -271,11 +295,22 @@ function HatsuStar({ hatsu, nenType, pendingKey, pendingNext }) {
                 opacity={opacity} fontWeight={fontWeight}>
                 {b.label}
               </text>
-              <text x={lx} y={ly + 10} textAnchor="middle" dominantBaseline="middle"
-                fontSize={15} fill={col} fontFamily="monospace"
-                fontWeight={fontWeight} opacity={opacity}>
-                {rank}
-              </text>
+              {rank === '✖' ? (
+                <text x={lx} y={ly + 10} textAnchor="middle" dominantBaseline="middle"
+                  fontSize={15} fill={col} fontFamily="monospace"
+                  fontWeight={fontWeight} opacity={opacity}>
+                  ✖
+                </text>
+              ) : (
+                <image
+                  href={rankImage || ''}
+                  x={lx - 12}
+                  y={ly + 2}
+                  width={24}
+                  height={24}
+                  opacity={opacity}
+                />
+              )}
             </g>
           );
         })}
@@ -859,10 +894,14 @@ export default function App() {
                 {HATSU_BRANCHES.map((b) => {
                   const rank = profile.hatsu_affinities?.[b.key] ?? 'E';
                   const blocked = rank === '✖' || rank === 'Z' || (profile.affinity_points ?? 0) <= 0 || savingAffinity;
+                  const rankImg = RANK_IMAGES[rank];
                   return (
                     <button key={b.key} disabled={blocked} onClick={() => upgradeAffinity(b.key)}
                       style={{ ...S.editBtn, width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderColor: blocked ? '#333' : (nenColor + '66'), color: blocked ? '#666' : nenColor, padding: '12px 14px', fontSize: 14, fontWeight: 'bold' }}>
-                      <span>{b.label} ({rank})</span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {b.label} 
+                        {rank === '✖' ? '✖' : rankImg ? <img src={rankImg} alt={rank} style={{ width: 20, height: 20 }} /> : rank}
+                      </span>
                       <span>{rank === '✖' ? '✖' : rank === 'Z' ? 'MAX' : '+1'}</span>
                     </button>
                   );
@@ -870,8 +909,11 @@ export default function App() {
               </div>
             ) : (
               <div>
-                <div style={{ padding: '12px 14px', background: '#ffd60a10', border: '1px solid #ffd60a40', borderRadius: 8, marginBottom: 10, fontSize: 13, color: '#ffd60a' }}>
-                  Prévisualisation: {HATSU_BRANCHES.find(b => b.key === pendingAffinity.key)?.label} ({pendingAffinity.current} → {pendingAffinity.next})
+                <div style={{ padding: '12px 14px', background: '#ffd60a10', border: '1px solid #ffd60a40', borderRadius: 8, marginBottom: 10, fontSize: 13, color: '#ffd60a', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  Prévisualisation: {HATSU_BRANCHES.find(b => b.key === pendingAffinity.key)?.label} 
+                  {RANK_IMAGES[pendingAffinity.current] && <img src={RANK_IMAGES[pendingAffinity.current]} alt={pendingAffinity.current} style={{ width: 20, height: 20 }} />}
+                  → 
+                  {RANK_IMAGES[pendingAffinity.next] && <img src={RANK_IMAGES[pendingAffinity.next]} alt={pendingAffinity.next} style={{ width: 20, height: 20 }} />}
                 </div>
                 <div style={{ display: 'flex', gap: 10 }}>
                   <button onClick={confirmAffinity} disabled={savingAffinity} style={{ ...S.editBtn, flex: 1, borderColor: '#ffd60a', color: '#ffd60a', fontWeight: 'bold', fontSize: 13 }}>
