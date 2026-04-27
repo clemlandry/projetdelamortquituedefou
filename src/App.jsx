@@ -158,23 +158,7 @@ async function fetchTechniques(discordId) {
   return Array.isArray(rows) ? rows : [];
 }
 
-// ─── StarRating ────────────────────────────────────────────────────────
-function StarRating({ value = 1, max = 5, color }) {
-  return (
-    <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
-      {Array.from({ length: max }).map((_, i) => (
-        <svg key={i} width={16} height={16} viewBox="0 0 16 16">
-          <polygon
-            points="8,1 10,6 15,6 11,9.5 12.5,15 8,12 3.5,15 5,9.5 1,6 6,6"
-            fill={i < value ? color : 'transparent'}
-            stroke={i < value ? color : '#4a5a6a'}
-            strokeWidth={1}
-          />
-        </svg>
-      ))}
-    </div>
-  );
-}
+
 
 // ─── HexBadge ──────────────────────────────────────────────────────────
 function HexBadge({ children, color, size = 44 }) {
@@ -498,10 +482,10 @@ export default function App() {
   const [imageUrlError, setImageUrlError] = useState('');
   const [techniquesLoading, setTechniquesLoading] = useState(false);
   const [dailyXp, setDailyXp] = useState(0);
-  const [isWideScreen, setIsWideScreen] = useState(window.innerWidth >= 1024);
+  const [isWideScreen, setIsWideScreen] = useState(window.innerWidth >= 640);
 
   useEffect(() => {
-    const handler = () => setIsWideScreen(window.innerWidth >= 1024);
+    const handler = () => setIsWideScreen(window.innerWidth >= 640);
     window.addEventListener('resize', handler);
     return () => window.removeEventListener('resize', handler);
   }, []);
@@ -734,9 +718,6 @@ export default function App() {
   const physVals = [localStats.force ?? 1, localStats.vitesse ?? 1, localStats.resistance ?? 1, localStats.technique ?? 1];
   const hasChanges = totalSpent !== 0;
 
-  // Rank stars derived from level
-  const starValue = Math.min(Math.ceil((profile.level || 1) / 50), 5);
-
   return (
     <div style={{ ...S.root, '--accent': nenColor }}>
       {/* Animated background */}
@@ -753,7 +734,7 @@ export default function App() {
         backgroundSize: '40px 40px',
       }} />
 
-      <div style={{ position: 'relative', zIndex: 1, maxWidth: 1200, margin: '0 auto', paddingBottom: 40 }}>
+      <div style={{ position: 'relative', zIndex: 1, maxWidth: 640, margin: '0 auto', paddingBottom: 40 }}>
 
         {/* ── HEADER BAND ── */}
         <div style={{ background: 'linear-gradient(180deg, #0d1e2e 0%, #091420 100%)', borderBottom: '1px solid #1a2d40', padding: '10px 14px 0' }}>
@@ -809,7 +790,15 @@ export default function App() {
                     {profile.char_name || <span style={{ color: '#2a3a4a' }}>Sans nom</span>}
                   </div>
                 </div>
-                <StarRating value={starValue} max={5} color={nenColor} />
+                <div style={{
+                  fontFamily: 'Oswald, sans-serif',
+                  fontSize: 15,
+                  fontWeight: '700',
+                  color: (profile.reputation ?? 0) > 0 ? '#ffd60a' : (profile.reputation ?? 0) < 0 ? '#f72585' : '#4a7090',
+                  letterSpacing: 1,
+                }}>
+                  {(profile.reputation ?? 0) > 0 ? '+' : ''}{profile.reputation ?? 0}
+                </div>
               </div>
 
               {/* Type badge */}
@@ -871,7 +860,6 @@ export default function App() {
               <div style={S.card}>
                 <div style={T.sectionTitle}>Informations</div>
                 <InfoRow icon="📍" label="Localisation" value={profile.location || 'Inconnue'} />
-                <InfoRow icon="⭐" label="Réputation" value={profile.reputation ?? 0} />
                 <InfoRow icon="🏅" label="Rang" value={profile.rank || '—'} color={nenColor} />
               </div>
 
