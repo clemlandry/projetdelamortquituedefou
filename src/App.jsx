@@ -741,8 +741,8 @@ export default function App() {
             {(() => {
               const lb = profile.limitbreak ?? false;
               const needed = xpRequired(profile.level, lb);
-              const xpInLevel = profile.xp % needed;
-              const xpRatio = Math.min(xpInLevel / needed, 1);
+              
+              const xpRatio = Math.min(profile.xp / needed, 1);
               const isBlocked = !lb && profile.level >= LEVEL_CAP;
               const xpColor = isBlocked ? '#ff0000' : lb ? '#ff4444' : nenColor;
               return (
@@ -753,7 +753,7 @@ export default function App() {
                       {isBlocked ? <span style={{ color: '#f72585', marginLeft: 6, fontSize: 10 }}>BLOQUÉ</span> : null}
                     </span>
                     <span style={{ fontSize: 11, fontFamily: 'monospace', color: xpColor }}>
-                      {xpInLevel} / {needed} XP
+                      {profile.xp} / {needed} XP
                     </span>
                   </div>
                   <div style={{ width: '100%', height: 5, background: '#2a2010', borderRadius: 3, overflow: 'hidden' }}>
