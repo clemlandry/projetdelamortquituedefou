@@ -46,7 +46,8 @@ const LEVEL_CAP   = 250;
 const DAILY_XP_CAP = 20;
 
 function xpRequired(level, limitbreak = false) {
-  if (!limitbreak) {
+  // Si limitbreak mais niveau < 250 : donnée incohérente, on utilise la formule normale
+  if (!limitbreak || level <= LEVEL_CAP) {
     return 20 + Math.floor(level / 10) * 5;
   }
   return 40 + Math.floor((level - LEVEL_CAP) / 10) * 5;
@@ -742,7 +743,8 @@ export default function App() {
               const lb = profile.limitbreak ?? false;
               const needed = xpRequired(profile.level, lb);
               
-              const xpRatio = Math.min(profile.xp / needed, 1);
+              const safeXp = Math.max(0, profile.xp ?? 0);
+              const xpRatio = Math.min(safeXp / needed, 1);
               const isBlocked = !lb && profile.level >= LEVEL_CAP;
               const xpColor = isBlocked ? '#ff0000' : lb ? '#ff4444' : nenColor;
               return (
@@ -753,7 +755,7 @@ export default function App() {
                       {isBlocked ? <span style={{ color: '#f72585', marginLeft: 6, fontSize: 10 }}>BLOQUÉ</span> : null}
                     </span>
                     <span style={{ fontSize: 11, fontFamily: 'monospace', color: xpColor }}>
-                      {profile.xp} / {needed} XP
+                      {safeXp} / {needed} XP
                     </span>
                   </div>
                   <div style={{ width: '100%', height: 5, background: '#2a2010', borderRadius: 3, overflow: 'hidden' }}>
