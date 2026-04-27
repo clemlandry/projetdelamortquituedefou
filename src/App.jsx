@@ -823,9 +823,9 @@ export default function App() {
               onInc={incReserve}
               onDec={decReserve}
               color="#4cc9f0"
-              canInc={isInfinitePoints || pointsLeft > 0}
+              canInc={(isInfinitePoints || pointsLeft > 0) && (profile?.limitbreak || (localReserve || 0) < STAT_LIMIT)}
               canDec={(localReserve || 0) > (profile?.nen_reserve ?? 0)}
-              limitbreak={true}
+              limitbreak={profile?.limitbreak ?? false}
             />
           </div>
         </div>
