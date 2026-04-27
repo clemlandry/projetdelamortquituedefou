@@ -336,7 +336,7 @@ function HatsuStar({ hatsu, nenType, pendingKey, pendingNext }) {
 function NenBars({ mastery, reserve, points, color }) {
   const safeMastery = Math.min(Math.max(mastery || 0, 0), 10);
   const safePoints = Math.max(points || 0, 0);
-  const maxPoints = Math.max(reserve || 0, safePoints, 1);
+  const maxPoints = Math.max((reserve || 0) * 10, 1);
   const reserveRatio = Math.min((reserve || 0) / maxPoints, 1);
 
   return (
