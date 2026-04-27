@@ -15,7 +15,7 @@ import zrank from './Ressources/zrank.png';
 // ─── Animations ────────────────────────────────────────────────────────
 const styleEl = document.createElement('style');
 styleEl.textContent = `
-  /* fonts: system only, no external requests */
+  /* fonts loaded via @fontsource in main.jsx */
   @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
   @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
   @keyframes shimmer { 0% { background-position: -200% center; } 100% { background-position: 200% center; } }
@@ -210,7 +210,7 @@ function RadarChart({ labels, values, color, title }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, width: '100%' }}>
-      <span style={{ fontFamily: "'Arial Narrow', Arial, Impact, sans-serif", fontSize: 11, color, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 2 }}>{title}</span>
+      <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 11, color, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 2 }}>{title}</span>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ overflow: 'visible' }}>
         {gridPolygons.map((pts, lvl) => <polygon key={lvl} points={pts} fill={lvl % 2 === 0 ? color + '08' : 'none'} stroke={color} strokeOpacity={0.15} strokeWidth={1} />)}
         {Array.from({ length: n }).map((_, i) => (
@@ -223,7 +223,7 @@ function RadarChart({ labels, values, color, title }) {
           const ly = cy + (r + 22) * Math.sin(angle(i));
           return (
             <text key={i} x={lx} y={ly} textAnchor="middle" dominantBaseline="middle"
-              fontSize={12} fill="#c8d8e8" fontFamily="Arial Narrow, Arial, Impact, sans-serif" fontWeight="600" letterSpacing="1">
+              fontSize={12} fill="#c8d8e8" fontFamily="Oswald, sans-serif" fontWeight="600" letterSpacing="1">
               {labels[i]}
             </text>
           );
@@ -259,7 +259,7 @@ function HatsuStar({ hatsu, nenType, pendingKey, pendingNext }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
-      <span style={{ fontFamily: "'Arial Narrow', Arial, Impact, sans-serif", fontSize: 11, color: '#8aa0b8', letterSpacing: 3, textTransform: 'uppercase', marginBottom: 4 }}>Affinités Hatsu</span>
+      <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 11, color: '#8aa0b8', letterSpacing: 3, textTransform: 'uppercase', marginBottom: 4 }}>Affinités Hatsu</span>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ overflow: 'visible' }}>
         {gridPolygons.map((pts, lvl) => (
           <polygon key={lvl} points={pts} fill={lvl % 2 === 0 ? '#ffffff05' : 'none'} stroke="#ffffff" strokeOpacity={0.07} strokeWidth={1} />
@@ -304,7 +304,7 @@ function HatsuStar({ hatsu, nenType, pendingKey, pendingNext }) {
           return (
             <g key={i}>
               <text x={lx} y={ly - 9} textAnchor="middle" dominantBaseline="middle"
-                fontSize={11} fill={col} fontFamily="Arial Narrow, Arial, Impact, sans-serif"
+                fontSize={11} fill={col} fontFamily="Oswald, sans-serif"
                 opacity={isPending || isActive ? 1 : 0.75} fontWeight="600" letterSpacing="1">
                 {b.label}
               </text>
@@ -315,7 +315,7 @@ function HatsuStar({ hatsu, nenType, pendingKey, pendingNext }) {
                 <image href={rankImg} x={lx - 10} y={ly + 2} width={20} height={20} />
               ) : (
                 <text x={lx} y={ly + 10} textAnchor="middle" dominantBaseline="middle"
-                  fontSize={13} fill={col} fontFamily="Arial Narrow, Arial, Impact, sans-serif" fontWeight="bold">{rank}</text>
+                  fontSize={13} fill={col} fontFamily="Oswald, sans-serif" fontWeight="bold">{rank}</text>
               )}
             </g>
           );
@@ -336,7 +336,7 @@ function NenBars({ mastery, reserve, points, color }) {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
         <span style={T.label}>Maîtrise Nen</span>
-        <span style={{ fontSize: 14, fontFamily: "'Arial Narrow', Arial, Impact, sans-serif", color, fontWeight: '600' }}>{safeMastery} <span style={{ color: '#4a5a70', fontSize: 11 }}>/ 10</span></span>
+        <span style={{ fontSize: 14, fontFamily: 'Oswald, sans-serif', color, fontWeight: '600' }}>{safeMastery} <span style={{ color: '#4a5a70', fontSize: 11 }}>/ 10</span></span>
       </div>
       <div style={{ display: 'flex', gap: 3, marginBottom: 14 }}>
         {Array.from({ length: 10 }).map((_, i) => (
@@ -350,14 +350,14 @@ function NenBars({ mastery, reserve, points, color }) {
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
         <span style={T.label}>Réserve Nen</span>
-        <span style={{ fontSize: 14, fontFamily: "'Arial Narrow', Arial, Impact, sans-serif", color, fontWeight: '600' }}>
+        <span style={{ fontSize: 14, fontFamily: 'Oswald, sans-serif', color, fontWeight: '600' }}>
           {safePoints} <span style={{ color: '#4a5a70', fontSize: 11 }}>/ {maxPoints}</span>
         </span>
       </div>
       <div style={{ width: '100%', height: 8, borderRadius: 4, background: '#1e2d3d', overflow: 'hidden', marginBottom: 6, position: 'relative' }}>
         <div style={{ width: `${reserveRatio * 100}%`, height: '100%', background: `linear-gradient(90deg, ${color}88, ${color})`, transition: 'width 0.3s', boxShadow: `0 0 8px ${color}60` }} />
       </div>
-      <div style={{ fontSize: 11, color: '#4a5a70', fontFamily: "'Trebuchet MS', 'Segoe UI', sans-serif" }}>
+      <div style={{ fontSize: 11, color: '#4a5a70', fontFamily: 'Rajdhani, sans-serif' }}>
         Réserve: <span style={{ color: '#8aa0b8' }}>{reserve || 0}</span>
       </div>
     </div>
@@ -380,7 +380,7 @@ function NenAbilitiesGrid({ abilities, color }) {
               background: unlocked ? `${color}18` : '#0d1824',
               color: unlocked ? color : '#2a3a4a',
               fontSize: 11,
-              fontFamily: "'Arial Narrow', Arial, Impact, sans-serif",
+              fontFamily: 'Oswald, sans-serif',
               letterSpacing: 2,
               display: 'flex', alignItems: 'center', gap: 5,
               boxShadow: unlocked ? `0 0 8px ${color}30` : 'none',
@@ -439,10 +439,10 @@ function StatRow({ label, value, onInc, onDec, color, canInc, canDec, limitbreak
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-      <div style={{ fontSize: 12, fontWeight: 600, color: '#8aa0b8', fontFamily: "'Arial Narrow', Arial, Impact, sans-serif", letterSpacing: 2, width: 105, minWidth: 105, flexShrink: 0, textAlign: 'right' }}>{label.toUpperCase()}</div>
+      <div style={{ fontSize: 12, fontWeight: 600, color: '#8aa0b8', fontFamily: 'Oswald, sans-serif', letterSpacing: 2, width: 105, minWidth: 105, flexShrink: 0, textAlign: 'right' }}>{label.toUpperCase()}</div>
       <button className="hold-btn" {...(canDec ? decHandlers : {})} disabled={!canDec}
         style={{ width: 32, height: 32, padding: 0, background: canDec ? '#1a2535' : '#0d1824', border: `1px solid ${canDec ? color + '50' : '#1e2d3d'}`, color: canDec ? '#c8d8e8' : '#2a3a4a', borderRadius: 3, cursor: canDec ? 'pointer' : 'default', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}>−</button>
-      <div style={{ width: 40, textAlign: 'center', fontSize: 16, fontWeight: 'bold', color: atLimit ? '#f72585' : '#e8f4ff', fontFamily: "'Arial Narrow', Arial, Impact, sans-serif", flexShrink: 0 }}>{value}</div>
+      <div style={{ width: 40, textAlign: 'center', fontSize: 16, fontWeight: 'bold', color: atLimit ? '#f72585' : '#e8f4ff', fontFamily: 'Oswald, sans-serif', flexShrink: 0 }}>{value}</div>
       <button className="hold-btn" {...(canInc ? incHandlers : {})} disabled={!canInc}
         style={{ width: 32, height: 32, padding: 0, background: canInc ? '#1a2535' : '#0d1824', border: `1px solid ${canInc ? color + '50' : '#1e2d3d'}`, color: canInc ? '#c8d8e8' : '#2a3a4a', borderRadius: 3, cursor: canInc ? 'pointer' : 'default', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}>+</button>
       <div style={{ flex: 1, height: 5, background: '#1a2535', borderRadius: 2, position: 'relative', minWidth: 40 }}>
@@ -466,7 +466,7 @@ function TabBar({ active, onChange }) {
           className={`ac-tab${active === tab ? ' active' : ''}`}
           style={{
             flex: 1, padding: '10px 4px', background: 'none', border: 'none', cursor: 'pointer',
-            fontFamily: "'Arial Narrow', Arial, Impact, sans-serif", fontSize: 11, letterSpacing: 2,
+            fontFamily: 'Oswald, sans-serif', fontSize: 11, letterSpacing: 2,
             color: active === tab ? 'var(--accent)' : '#3a5060',
             fontWeight: active === tab ? '600' : '400',
             transition: 'color 0.2s',
@@ -720,13 +720,13 @@ export default function App() {
         <polygon points="30,4 56,18 56,42 30,56 4,42 4,18" fill="none" stroke={nenColor} strokeWidth={1.5} />
         <polygon points="30,12 48,22 48,38 30,48 12,38 12,22" fill="none" stroke={nenColor} strokeWidth={1} strokeOpacity={0.4} />
       </svg>
-      <p style={{ color: '#4a7090', fontFamily: "'Arial Narrow', Arial, Impact, sans-serif", letterSpacing: 4, marginTop: 16, fontSize: 12 }}>CHARGEMENT...</p>
+      <p style={{ color: '#4a7090', fontFamily: 'Oswald, sans-serif', letterSpacing: 4, marginTop: 16, fontSize: 12 }}>CHARGEMENT...</p>
     </div>
   );
 
   if (error) return (
     <div style={S.center}>
-      <p style={{ color: '#f72585', fontFamily: "'Arial Narrow', Arial, Impact, sans-serif", letterSpacing: 2 }}>ERREUR — {error}</p>
+      <p style={{ color: '#f72585', fontFamily: 'Oswald, sans-serif', letterSpacing: 2 }}>ERREUR — {error}</p>
     </div>
   );
 
@@ -766,14 +766,14 @@ export default function App() {
                   <polygon points="7,1 13,4 13,10 7,13 1,10 1,4" fill="none" stroke={nenColor} strokeWidth={1.2} />
                 </svg>
               </div>
-              <span style={{ fontFamily: "'Arial Narrow', Arial, Impact, sans-serif", fontSize: 11, color: '#4a7090', letterSpacing: 2 }}>HxH · GUILDE</span>
+              <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 11, color: '#4a7090', letterSpacing: 2 }}>HxH · GUILDE</span>
             </div>
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{ fontFamily: "'Arial Narrow', Arial, Impact, sans-serif", fontSize: 13, color: '#ffd60a', fontWeight: '600' }}>
+                <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 13, color: '#ffd60a', fontWeight: '600' }}>
                   {profile.jenny?.toLocaleString() ?? 0}
                 </span>
-                <span style={{ fontSize: 9, color: '#4a5a70', fontFamily: "'Arial Narrow', Arial, Impact, sans-serif", letterSpacing: 1 }}>JENNY</span>
+                <span style={{ fontSize: 9, color: '#4a5a70', fontFamily: 'Oswald, sans-serif', letterSpacing: 1 }}>JENNY</span>
               </div>
             </div>
           </div>
@@ -804,8 +804,8 @@ export default function App() {
             <div style={{ flex: 1, paddingTop: 2 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
                 <div>
-                  {profile.char_surname && <div style={{ fontFamily: "'Trebuchet MS', 'Segoe UI', sans-serif", fontSize: 11, color: '#4a7090', letterSpacing: 3, textTransform: 'uppercase' }}>{profile.char_surname}</div>}
-                  <div style={{ fontFamily: "'Arial Narrow', Arial, Impact, sans-serif", fontSize: 22, fontWeight: '700', color: '#e8f4ff', letterSpacing: 1, lineHeight: 1.1 }}>
+                  {profile.char_surname && <div style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 11, color: '#4a7090', letterSpacing: 3, textTransform: 'uppercase' }}>{profile.char_surname}</div>}
+                  <div style={{ fontFamily: 'Oswald, sans-serif', fontSize: 22, fontWeight: '700', color: '#e8f4ff', letterSpacing: 1, lineHeight: 1.1 }}>
                     {profile.char_name || <span style={{ color: '#2a3a4a' }}>Sans nom</span>}
                   </div>
                 </div>
@@ -817,7 +817,7 @@ export default function App() {
                 display: 'inline-flex', alignItems: 'center', gap: 5, marginBottom: 8,
                 padding: '3px 10px', borderRadius: 2,
                 border: `1px solid ${nenColor}60`, background: nenColor + '18',
-                fontFamily: "'Arial Narrow', Arial, Impact, sans-serif", fontSize: 11, letterSpacing: 2, color: nenColor,
+                fontFamily: 'Oswald, sans-serif', fontSize: 11, letterSpacing: 2, color: nenColor,
               }}>
                 <span style={{ fontSize: 7 }}>◆</span> {profile.nen_type}
               </div>
@@ -833,11 +833,11 @@ export default function App() {
                 return (
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <span style={{ fontFamily: "'Arial Narrow', Arial, Impact, sans-serif", fontSize: 11, color: '#4a7090', letterSpacing: 2 }}>
+                      <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 11, color: '#4a7090', letterSpacing: 2 }}>
                         NIV. {profile.level}{lb ? ' ✦' : ''}
                         {isBlocked && <span style={{ color: '#f72585', marginLeft: 6, fontSize: 9 }}>BLOQUÉ</span>}
                       </span>
-                      <span style={{ fontFamily: "'Trebuchet MS', 'Segoe UI', sans-serif", fontSize: 11, color: xpColor }}>
+                      <span style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 11, color: xpColor }}>
                         {safeXp} / {needed} XP
                       </span>
                     </div>
@@ -845,10 +845,10 @@ export default function App() {
                       <div style={{ width: `${xpRatio * 100}%`, height: '100%', background: `linear-gradient(90deg, ${xpColor}88, ${xpColor})`, borderRadius: 2, boxShadow: `0 0 6px ${xpColor}60` }} />
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3 }}>
-                      <span style={{ fontSize: 10, color: '#2a4050', fontFamily: "'Trebuchet MS', 'Segoe UI', sans-serif" }}>
+                      <span style={{ fontSize: 10, color: '#2a4050', fontFamily: 'Rajdhani, sans-serif' }}>
                         XP AUJOURD'HUI: <span style={{ color: dailyXp >= DAILY_XP_CAP ? '#f72585' : '#4a7090' }}>{dailyXp}</span>/{DAILY_XP_CAP}
                       </span>
-                      <span style={{ fontSize: 10, color: '#2a4050', fontFamily: "'Trebuchet MS', 'Segoe UI', sans-serif" }}>
+                      <span style={{ fontSize: 10, color: '#2a4050', fontFamily: 'Rajdhani, sans-serif' }}>
                         {profile.location || '—'}
                       </span>
                     </div>
@@ -901,8 +901,8 @@ export default function App() {
                   <div style={{ flex: 1 }}>
                     <div style={T.sectionTitle}>Améliorer les affinités</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
-                      <span style={{ fontFamily: "'Trebuchet MS', 'Segoe UI', sans-serif", fontSize: 12, color: '#4a7090' }}>Points d'affinité:</span>
-                      <span style={{ fontFamily: "'Arial Narrow', Arial, Impact, sans-serif", color: '#ffd60a', fontWeight: '600', fontSize: 16 }}>{profile.affinity_points ?? 0}</span>
+                      <span style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 12, color: '#4a7090' }}>Points d'affinité:</span>
+                      <span style={{ fontFamily: 'Oswald, sans-serif', color: '#ffd60a', fontWeight: '600', fontSize: 16 }}>{profile.affinity_points ?? 0}</span>
                     </div>
                     {!pendingAffinity ? (
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -913,7 +913,7 @@ export default function App() {
                           const bColor = blocked ? '#1e2d3d' : nenColor;
                           return (
                             <button key={b.key} disabled={blocked} onClick={() => upgradeAffinity(b.key)} className="ac-btn"
-                              style={{ background: '#0d1824', border: `1px solid ${blocked ? '#1a2535' : nenColor + '50'}`, borderRadius: 3, padding: '8px 10px', cursor: blocked ? 'default' : 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontFamily: "'Arial Narrow', Arial, Impact, sans-serif", fontSize: 11, letterSpacing: 1, color: blocked ? '#2a3a4a' : nenColor, transition: 'all 0.15s' }}>
+                              style={{ background: '#0d1824', border: `1px solid ${blocked ? '#1a2535' : nenColor + '50'}`, borderRadius: 3, padding: '8px 10px', cursor: blocked ? 'default' : 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontFamily: 'Oswald, sans-serif', fontSize: 11, letterSpacing: 1, color: blocked ? '#2a3a4a' : nenColor, transition: 'all 0.15s' }}>
                               <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                                 {b.label}
                                 {rank === '✖' ? ' ✖' : rankImg ? <img src={rankImg} alt={rank} style={{ width: 16, height: 16 }} /> : ` ${rank}`}
@@ -925,7 +925,7 @@ export default function App() {
                       </div>
                     ) : (
                       <div>
-                        <div style={{ padding: '10px 12px', background: '#ffd60a0d', border: '1px solid #ffd60a30', borderRadius: 3, marginBottom: 10, fontSize: 12, color: '#ffd60a', fontFamily: "'Arial Narrow', Arial, Impact, sans-serif", letterSpacing: 1 }}>
+                        <div style={{ padding: '10px 12px', background: '#ffd60a0d', border: '1px solid #ffd60a30', borderRadius: 3, marginBottom: 10, fontSize: 12, color: '#ffd60a', fontFamily: 'Oswald, sans-serif', letterSpacing: 1 }}>
                           APERÇU: {HATSU_BRANCHES.find(b => b.key === pendingAffinity.key)?.label}
                           {RANK_IMAGES[pendingAffinity.current] && <img src={RANK_IMAGES[pendingAffinity.current]} alt="" style={{ width: 16, height: 16, marginLeft: 6, verticalAlign: 'middle' }} />}
                           {' → '}
@@ -952,8 +952,8 @@ export default function App() {
             <div>
               {/* Points bar */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: '#0d1824', border: '1px solid #1a2d40', borderRadius: 4, marginBottom: 12 }}>
-                <span style={{ fontFamily: "'Arial Narrow', Arial, Impact, sans-serif", fontSize: 11, color: '#4a7090', letterSpacing: 2 }}>POINTS DISPONIBLES</span>
-                <span style={{ fontFamily: "'Arial Narrow', Arial, Impact, sans-serif", fontSize: 20, fontWeight: '700', color: pointsLeft > 0 ? '#ffd60a' : '#2a3a4a' }}>
+                <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 11, color: '#4a7090', letterSpacing: 2 }}>POINTS DISPONIBLES</span>
+                <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 20, fontWeight: '700', color: pointsLeft > 0 ? '#ffd60a' : '#2a3a4a' }}>
                   {isInfinitePoints ? '∞' : pointsLeft}
                 </span>
               </div>
@@ -991,18 +991,18 @@ export default function App() {
           {activeTab === 'TECHNIQUES' && (
             <div>
               {techniquesLoading ? (
-                <div style={{ color: '#2a3a4a', fontSize: 12, fontFamily: "'Arial Narrow', Arial, Impact, sans-serif", letterSpacing: 2, textAlign: 'center', padding: 30 }}>CHARGEMENT...</div>
+                <div style={{ color: '#2a3a4a', fontSize: 12, fontFamily: 'Oswald, sans-serif', letterSpacing: 2, textAlign: 'center', padding: 30 }}>CHARGEMENT...</div>
               ) : profile.techniques?.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {profile.techniques.map(t => (
                     <div key={t.id} style={{ padding: '12px 14px', background: '#0d1824', border: `1px solid ${nenColor}30`, borderRadius: 4, borderLeft: `3px solid ${nenColor}` }}>
-                      <div style={{ fontFamily: "'Arial Narrow', Arial, Impact, sans-serif", fontSize: 14, color: '#e8f4ff', letterSpacing: 1 }}>{t.name}</div>
-                      {t.description && <div style={{ fontFamily: "'Trebuchet MS', 'Segoe UI', sans-serif", fontSize: 12, color: '#4a7090', marginTop: 4 }}>{t.description}</div>}
+                      <div style={{ fontFamily: 'Oswald, sans-serif', fontSize: 14, color: '#e8f4ff', letterSpacing: 1 }}>{t.name}</div>
+                      {t.description && <div style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 12, color: '#4a7090', marginTop: 4 }}>{t.description}</div>}
                     </div>
                   ))}
                 </div>
               ) : (
-                <div style={{ color: '#2a3a4a', fontSize: 12, fontFamily: "'Arial Narrow', Arial, Impact, sans-serif", letterSpacing: 2, textAlign: 'center', padding: '40px 0' }}>
+                <div style={{ color: '#2a3a4a', fontSize: 12, fontFamily: 'Oswald, sans-serif', letterSpacing: 2, textAlign: 'center', padding: '40px 0' }}>
                   AUCUNE TECHNIQUE
                 </div>
               )}
@@ -1043,7 +1043,7 @@ export default function App() {
               placeholder="https://..."
               autoFocus
             />
-            {imageUrlError && <div style={{ color: '#f72585', fontSize: 11, marginTop: 5, fontFamily: "'Trebuchet MS', 'Segoe UI', sans-serif" }}>{imageUrlError}</div>}
+            {imageUrlError && <div style={{ color: '#f72585', fontSize: 11, marginTop: 5, fontFamily: 'Rajdhani, sans-serif' }}>{imageUrlError}</div>}
             {newImageUrl.trim() && !imageUrlError && (
               <img src={proxyImg(newImageUrl.trim())} alt="preview"
                 style={{ width: '100%', height: 140, objectFit: 'cover', borderRadius: 3, marginTop: 10, border: '1px solid #1e2d3d' }}
@@ -1064,25 +1064,25 @@ export default function App() {
 function InfoRow({ icon, label, value, color }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #0d1824' }}>
-      <span style={{ fontFamily: "'Arial Narrow', Arial, Impact, sans-serif", fontSize: 11, color: '#4a7090', letterSpacing: 2 }}>{icon} {label.toUpperCase()}</span>
-      <span style={{ fontFamily: "'Trebuchet MS', 'Segoe UI', sans-serif", fontSize: 13, color: color || '#8aa0b8', fontWeight: '600' }}>{value}</span>
+      <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 11, color: '#4a7090', letterSpacing: 2 }}>{icon} {label.toUpperCase()}</span>
+      <span style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 13, color: color || '#8aa0b8', fontWeight: '600' }}>{value}</span>
     </div>
   );
 }
 
 // ─── STYLES ────────────────────────────────────────────────────────────
 const S = {
-  root: { minHeight: '100vh', background: '#060f18', color: '#e8f4ff', fontFamily: "'Trebuchet MS', 'Segoe UI', sans-serif", position: 'relative', overflow: 'hidden' },
+  root: { minHeight: '100vh', background: '#060f18', color: '#e8f4ff', fontFamily: 'Rajdhani, sans-serif', position: 'relative', overflow: 'hidden' },
   center: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#060f18' },
   card: { padding: '14px 14px', background: '#0d1824', border: '1px solid #1a2d40', borderRadius: 4, display: 'flex', flexDirection: 'column' },
-  acBtn: { background: 'transparent', border: '1px solid', borderRadius: 3, padding: '8px 16px', cursor: 'pointer', fontFamily: "'Arial Narrow', Arial, Impact, sans-serif", letterSpacing: 2, fontSize: 11, transition: 'all 0.15s' },
+  acBtn: { background: 'transparent', border: '1px solid', borderRadius: 3, padding: '8px 16px', cursor: 'pointer', fontFamily: 'Oswald, sans-serif', letterSpacing: 2, fontSize: 11, transition: 'all 0.15s' },
   modalBg: { position: 'fixed', inset: 0, background: '#000000c0', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, backdropFilter: 'blur(6px)' },
   modal: { background: '#0a1520', border: '1px solid #1e2d3d', borderRadius: 5, padding: '22px', width: '88%', maxWidth: 340, position: 'relative' },
-  input: { width: '100%', background: '#060f18', border: '1px solid', borderRadius: 3, padding: '9px 12px', color: '#e8f4ff', fontFamily: "'Trebuchet MS', 'Segoe UI', sans-serif", fontSize: 13, boxSizing: 'border-box', outline: 'none' },
+  input: { width: '100%', background: '#060f18', border: '1px solid', borderRadius: 3, padding: '9px 12px', color: '#e8f4ff', fontFamily: 'Rajdhani, sans-serif', fontSize: 13, boxSizing: 'border-box', outline: 'none' },
 };
 
 const T = {
-  sectionTitle: { fontFamily: "'Arial Narrow', Arial, Impact, sans-serif", fontSize: 11, letterSpacing: 3, textTransform: 'uppercase', color: '#4a7090', marginBottom: 8 },
-  label: { display: 'block', fontFamily: "'Arial Narrow', Arial, Impact, sans-serif", fontSize: 10, color: '#3a5060', letterSpacing: 2, marginBottom: 5, marginTop: 12, textTransform: 'uppercase' },
-  modalTitle: { fontFamily: "'Arial Narrow', Arial, Impact, sans-serif", fontSize: 14, letterSpacing: 3, color: '#8aa0b8', marginBottom: 4 },
+  sectionTitle: { fontFamily: 'Oswald, sans-serif', fontSize: 11, letterSpacing: 3, textTransform: 'uppercase', color: '#4a7090', marginBottom: 8 },
+  label: { display: 'block', fontFamily: 'Oswald, sans-serif', fontSize: 10, color: '#3a5060', letterSpacing: 2, marginBottom: 5, marginTop: 12, textTransform: 'uppercase' },
+  modalTitle: { fontFamily: 'Oswald, sans-serif', fontSize: 14, letterSpacing: 3, color: '#8aa0b8', marginBottom: 4 },
 };
