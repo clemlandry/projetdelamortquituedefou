@@ -400,7 +400,7 @@ function StatRow({ label, value, onInc, onDec, color, canInc, canDec, limitbreak
   const STAT_MAX    = 1200;
   const limitRatio  = STAT_LIMIT / STAT_MAX; // position du trait limite (~87.5%)
   const statPercentage = Math.min((value / STAT_MAX) * 100, 100);
-  const atLimit = value >= STAT_LIMIT;
+  const atLimit = !limitbreak && value >= STAT_LIMIT;
 
   const incHandlers = useHoldAction(onInc, canInc);
   const decHandlers = useHoldAction(onDec, canDec);
