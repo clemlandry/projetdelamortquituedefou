@@ -336,12 +336,14 @@ function NenAbilitiesGrid({ abilities, color }) {
 // ─── useHoldAction ─────────────────────────────────────────────────────
 // Déclenche action() immédiatement au mousedown, puis accélère progressivement
 // tant que le bouton reste appuyé. S'arrête proprement au mouseup/mouseleave/touchend.
-function useHoldAction(action, { initialDelay = 400, minInterval = 40, acceleration = 0.82 } = {}) {
+function useHoldAction(action, enabled, { initialDelay = 400, minInterval = 40, acceleration = 0.82 } = {}) {
   const timerRef = useRef(null);
   const repeatRef = useRef(null);
   const currentInterval = useRef(150);
   const actionRef = useRef(action);
+  const enabledRef = useRef(enabled);
   actionRef.current = action;
+  enabledRef.current = enabled;
 
   const stop = useCallback(() => {
     clearTimeout(timerRef.current);
@@ -352,13 +354,15 @@ function useHoldAction(action, { initialDelay = 400, minInterval = 40, accelerat
   }, []);
 
   const start = useCallback(() => {
+    if (!enabledRef.current) return;
     actionRef.current();
     timerRef.current = setTimeout(function tick() {
+      if (!enabledRef.current) { stop(); return; }
       actionRef.current();
       currentInterval.current = Math.max(minInterval, currentInterval.current * acceleration);
       repeatRef.current = setTimeout(tick, currentInterval.current);
     }, initialDelay);
-  }, [initialDelay, minInterval, acceleration]);
+  }, [initialDelay, minInterval, acceleration, stop]);
 
   useEffect(() => () => stop(), [stop]);
 
@@ -398,8 +402,8 @@ function StatRow({ label, value, onInc, onDec, color, canInc, canDec, limitbreak
   const statPercentage = Math.min((value / STAT_MAX) * 100, 100);
   const atLimit = value >= STAT_LIMIT;
 
-  const incHandlers = useHoldAction(onInc);
-  const decHandlers = useHoldAction(onDec);
+  const incHandlers = useHoldAction(onInc, canInc);
+  const decHandlers = useHoldAction(onDec, canDec);
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
