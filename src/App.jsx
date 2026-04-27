@@ -162,40 +162,114 @@ async function fetchTechniques(discordId) {
 }
 
 // ─── Radar Chart ───────────────────────────────────────────────────────
+// ─── Radar Chart (Style "Segmented / Modern") ────────────────────────
 function RadarChart({ labels, values, color, title }) {
-  const size = 280, cx = 140, cy = 140, r = 75, n = labels.length, levels = 5;
+  const size = 280, cx = 140, cy = 140, r = 80, n = labels.length, levels = 4;
+  
   const angle = useCallback((i) => (Math.PI * 2 * i) / n - Math.PI / 2, [n]);
   const maxVal = Math.max(...values, 1);
+
+  // 1. Calcul des points de données
+  const dataPoints = useMemo(() =>
+    values.map((v, i) => {
+      const ratio = v / maxVal;
+      return { x: cx + r * ratio * Math.cos(angle(i)), y: cy + r * ratio * Math.sin(angle(i)) };
+    }), [values, maxVal, angle]);
+    
+  const polygon = dataPoints.map(p => `${p.x},${p.y}`).join(' ');
+
+  // 2. Polygones de fond (Les "zones" colorées en parts de gâteau)
+  const backgroundSectors = useMemo(() => {
+    return Array.from({ length: n }).map((_, i) => {
+      const nextI = (i + 1) % n;
+      const x1 = cx + r * Math.cos(angle(i));
+      const y1 = cy + r * Math.sin(angle(i));
+      const x2 = cx + r * Math.cos(angle(nextI));
+      const y2 = cy + r * Math.sin(angle(nextI));
+      
+      // Alterne légèrement l'opacité pour créer l'effet "zones" de ton image
+      const fillOpacity = i % 2 === 0 ? "0.06" : "0.02";
+
+      return (
+        <polygon 
+          key={`sec-${i}`} 
+          points={`${cx},${cy} ${x1},${y1} ${x2},${y2}`} 
+          fill="#ffffff" 
+          fillOpacity={fillOpacity} 
+        />
+      );
+    });
+  }, [n, angle, cx, cy, r]);
+
+  // 3. Toile d'araignée subtile (grille)
   const gridPolygons = useMemo(() =>
     Array.from({ length: levels }).map((_, lvl) =>
       Array.from({ length: n }).map((_, i) => {
         const ratio = (lvl + 1) / levels;
         return `${cx + r * ratio * Math.cos(angle(i))},${cy + r * ratio * Math.sin(angle(i))}`;
       }).join(' ')
-    ), [n, angle]);
-  const dataPoints = useMemo(() =>
-    values.map((v, i) => {
-      const ratio = v / maxVal;
-      return { x: cx + r * ratio * Math.cos(angle(i)), y: cy + r * ratio * Math.sin(angle(i)) };
-    }), [values, maxVal, angle]);
-  const polygon = dataPoints.map(p => `${p.x},${p.y}`).join(' ');
+    ), [n, angle, cx, cy, r]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, width: '100%' }}>
-      <span style={{ fontFamily: "'Cinzel', serif", fontSize: 12, color, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 2 }}>{title}</span>
+      <span style={{ fontFamily: "'Cinzel', serif", fontSize: 13, color, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 6 }}>
+        {title}
+      </span>
+      
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ overflow: 'visible' }}>
-        {gridPolygons.map((pts, lvl) => <polygon key={lvl} points={pts} fill="none" stroke={color} strokeOpacity={0.12} strokeWidth={1} />)}
-        {Array.from({ length: n }).map((_, i) => (
-          <line key={i} x1={cx} y1={cy} x2={cx + r * Math.cos(angle(i))} y2={cy + r * Math.sin(angle(i))} stroke={color} strokeOpacity={0.2} strokeWidth={1} />
+        <defs>
+          {/* Effet de lueur pour imiter le néon de la réf */}
+          <filter id={`glow-${title}`} x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="4" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+        </defs>
+
+        {/* --- FOND SEGMENTÉ --- */}
+        {backgroundSectors}
+
+        {/* --- GRILLE CONCENTRIQUE --- */}
+        {gridPolygons.map((pts, lvl) => (
+          <polygon key={lvl} points={pts} fill="none" stroke="#ffffff" strokeOpacity={0.05} strokeWidth={1} />
         ))}
-        <polygon points={polygon} fill={color} fillOpacity={0.18} stroke={color} strokeWidth={2} strokeOpacity={0.9} />
-        {dataPoints.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={3} fill={color} />)}
+
+        {/* --- AXES ET LOSANGES --- */}
         {Array.from({ length: n }).map((_, i) => {
-          const lx = cx + (r + 20) * Math.cos(angle(i));
-          const ly = cy + (r + 20) * Math.sin(angle(i));
+          const endX = cx + r * Math.cos(angle(i));
+          const endY = cy + r * Math.sin(angle(i));
           return (
-            <text key={i} x={lx} y={ly} textAnchor="middle" dominantBaseline="middle"
-              fontSize={14} fill="#ffffff" fontFamily="'Cinzel', serif" fontWeight="600">
+            <g key={`axis-${i}`}>
+              {/* Ligne de l'axe */}
+              <line x1={cx} y1={cy} x2={endX} y2={endY} stroke="#ffffff" strokeOpacity={0.15} strokeWidth={1.5} />
+              {/* Petit losange au bout de chaque axe (comme sur l'image) */}
+              <rect 
+                x={endX - 3} y={endY - 3} width={6} height={6} 
+                fill="#ffffff" fillOpacity={0.9} 
+                transform={`rotate(45 ${endX} ${endY})`} 
+              />
+            </g>
+          );
+        })}
+
+        {/* --- DONNÉES (Polygone central avec glow) --- */}
+        {/* Ombre/Glow */}
+        <polygon points={polygon} fill="none" stroke={color} strokeWidth={6} opacity={0.3} filter={`url(#glow-${title})`} />
+        {/* Forme principale */}
+        <polygon points={polygon} fill={color} fillOpacity={0.4} stroke={color} strokeWidth={2.5} strokeLinejoin="round" />
+        
+        {/* Points de données (optionnels, on peut les enlever pour faire plus pur) */}
+        {dataPoints.map((p, i) => (
+          <circle key={`dot-${i}`} cx={p.x} cy={p.y} r={3} fill="#ffffff" />
+        ))}
+
+        {/* --- LABELS --- */}
+        {Array.from({ length: n }).map((_, i) => {
+          // On écarte un peu plus le texte pour laisser respirer les losanges
+          const lx = cx + (r + 25) * Math.cos(angle(i));
+          const ly = cy + (r + 25) * Math.sin(angle(i));
+          return (
+            <text key={`label-${i}`} x={lx} y={ly} textAnchor="middle" dominantBaseline="middle"
+              fontSize={12} fill="#e0d5c5" fontFamily="'Cinzel', serif" fontWeight="600" letterSpacing={1}>
               {labels[i]}
             </text>
           );
