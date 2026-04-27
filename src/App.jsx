@@ -67,6 +67,8 @@ const db = {
 // ─── Constantes ────────────────────────────────────────────────────────
 const LEVEL_CAP = 250;
 const DAILY_XP_CAP = 20;
+// FIX: déplacé hors de StatRow pour éviter la redéfinition à chaque render
+const STAT_MAX = 1200;
 
 function xpRequired(level, limitbreak = false) {
   if (!limitbreak || level <= LEVEL_CAP) return 20 + Math.floor(level / 10) * 5;
@@ -158,42 +160,46 @@ async function fetchTechniques(discordId) {
   return Array.isArray(rows) ? rows : [];
 }
 
-
-
-// ─── HexBadge ──────────────────────────────────────────────────────────
-function HexBadge({ children, color, size = 44 }) {
-  return (
-    <div style={{ position: 'relative', width: size, height: size * 1.15, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-      <svg width={size} height={size * 1.15} viewBox="0 0 44 50" style={{ position: 'absolute' }}>
-        <polygon points="22,2 42,13 42,37 22,48 2,37 2,13"
-          fill={color + '22'} stroke={color} strokeWidth={1.5} />
-      </svg>
-      <span style={{ position: 'relative', zIndex: 1, fontSize: size * 0.38, color }}>{children}</span>
-    </div>
-  );
-}
-
 // ─── Radar Chart ───────────────────────────────────────────────────────
 function RadarChart({ labels, values, color, title }) {
-  const size = 280, cx = 140, cy = 140, r = 75, n = labels.length, levels = 5;
+  const containerRef = useRef(null);
+  const [size, setSize] = useState(280);
+
+  useEffect(() => {
+    const updateSize = () => {
+      if (containerRef.current) {
+        const containerWidth = containerRef.current.offsetWidth;
+        setSize(Math.min(containerWidth - 20, 320));
+      }
+    };
+    updateSize();
+    window.addEventListener('resize', updateSize);
+    return () => window.removeEventListener('resize', updateSize);
+  }, []);
+
+  const cx = size / 2, cy = size / 2, r = size * 0.27, n = labels.length, levels = 5;
   const angle = useCallback((i) => (Math.PI * 2 * i) / n - Math.PI / 2, [n]);
   const maxVal = Math.max(...values, 1);
+
+  // FIX: ajout de cx, cy, r, levels dans les dépendances
   const gridPolygons = useMemo(() =>
     Array.from({ length: levels }).map((_, lvl) =>
       Array.from({ length: n }).map((_, i) => {
         const ratio = (lvl + 1) / levels;
         return `${cx + r * ratio * Math.cos(angle(i))},${cy + r * ratio * Math.sin(angle(i))}`;
       }).join(' ')
-    ), [n, angle]);
+    ), [n, angle, cx, cy, r, levels]);
+
   const dataPoints = useMemo(() =>
     values.map((v, i) => {
       const ratio = v / maxVal;
       return { x: cx + r * ratio * Math.cos(angle(i)), y: cy + r * ratio * Math.sin(angle(i)) };
-    }), [values, maxVal, angle]);
+    }), [values, maxVal, angle, cx, cy, r]);
+
   const polygon = dataPoints.map(p => `${p.x},${p.y}`).join(' ');
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, width: '100%' }}>
+    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0, width: '100%' }}>
       <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 11, color, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 2 }}>{title}</span>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ overflow: 'visible' }}>
         {gridPolygons.map((pts, lvl) => <polygon key={lvl} points={pts} fill={lvl % 2 === 0 ? color + '08' : 'none'} stroke={color} strokeOpacity={0.15} strokeWidth={1} />)}
@@ -203,8 +209,8 @@ function RadarChart({ labels, values, color, title }) {
         <polygon points={polygon} fill={color} fillOpacity={0.2} stroke={color} strokeWidth={2} strokeOpacity={1} />
         {dataPoints.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={4} fill={color} stroke="#1a2535" strokeWidth={1} />)}
         {Array.from({ length: n }).map((_, i) => {
-          const lx = cx + (r + 22) * Math.cos(angle(i));
-          const ly = cy + (r + 22) * Math.sin(angle(i));
+          const lx = cx + (r + size * 0.08) * Math.cos(angle(i));
+          const ly = cy + (r + size * 0.08) * Math.sin(angle(i));
           return (
             <text key={i} x={lx} y={ly} textAnchor="middle" dominantBaseline="middle"
               fontSize={12} fill="#c8d8e8" fontFamily="Oswald, sans-serif" fontWeight="600" letterSpacing="1">
@@ -219,30 +225,47 @@ function RadarChart({ labels, values, color, title }) {
 
 // ─── HatsuStar ─────────────────────────────────────────────────────────
 function HatsuStar({ hatsu, nenType, pendingKey, pendingNext }) {
-  const size = 300, cx = 150, cy = 150, r = 80, n = 6, levels = RANKS.length;
+  const containerRef = useRef(null);
+  const [size, setSize] = useState(300);
+
+  useEffect(() => {
+    const updateSize = () => {
+      if (containerRef.current) {
+        const containerWidth = containerRef.current.offsetWidth;
+        setSize(Math.min(containerWidth - 20, 350));
+      }
+    };
+    updateSize();
+    window.addEventListener('resize', updateSize);
+    return () => window.removeEventListener('resize', updateSize);
+  }, []);
+
+  const cx = size / 2, cy = size / 2, r = size * 0.27, n = 6, levels = RANKS.length;
   const angle = useCallback((i) => (Math.PI * 2 * i) / n - Math.PI / 2, [n]);
+
   const dataPoints = useMemo(() => HATSU_BRANCHES.map((b, i) => {
-    let rank = b.key === pendingKey && pendingNext ? pendingNext : (hatsu?.[b.key] || 'E');
+    const rank = b.key === pendingKey && pendingNext ? pendingNext : (hatsu?.[b.key] || 'E');
     const ratio = rank === '✖' ? 0 : (RANK_RATIO[rank] ?? (1 / RANKS.length));
     return { x: cx + r * ratio * Math.cos(angle(i)), y: cy + r * ratio * Math.sin(angle(i)) };
-  }), [hatsu, angle, pendingKey, pendingNext]);
+  }), [hatsu, angle, pendingKey, pendingNext, cx, cy, r]);
 
-  const polygon = dataPoints.map(p => `${p.x},${p.y}`).join(' ');
+  const polygon = dataPoints.map(p => `${p.x},${p.y}`).join(',');
   const activeIdx = HATSU_BRANCHES.findIndex(b => b.nenType === nenType);
   const pendingIdx = HATSU_BRANCHES.findIndex(b => b.key === pendingKey);
   const activeColor = NEN_COLORS[nenType] || '#7a8fa6';
   const pendingColor = '#ffd60a';
 
+  // FIX: ajout de cx, cy, r, levels dans les dépendances
   const gridPolygons = useMemo(() =>
     Array.from({ length: levels }).map((_, lvl) =>
       Array.from({ length: n }).map((_, i) => {
         const ratio = (lvl + 1) / levels;
         return `${cx + r * ratio * Math.cos(angle(i))},${cy + r * ratio * Math.sin(angle(i))}`;
       }).join(' ')
-    ), [n, angle]);
+    ), [n, angle, cx, cy, r, levels]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
       <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 11, color: '#8aa0b8', letterSpacing: 3, textTransform: 'uppercase', marginBottom: 4 }}>Affinités Hatsu</span>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ overflow: 'visible' }}>
         {gridPolygons.map((pts, lvl) => (
@@ -279,8 +302,8 @@ function HatsuStar({ hatsu, nenType, pendingKey, pendingNext }) {
           return <circle key={i} cx={p.x} cy={p.y} r={3} fill="#8aa0b8" fillOpacity={0.5} />;
         })}
         {HATSU_BRANCHES.map((b, i) => {
-          const lx = cx + (r + 26) * Math.cos(angle(i));
-          const ly = cy + (r + 26) * Math.sin(angle(i));
+          const lx = cx + (r + size * 0.09) * Math.cos(angle(i));
+          const ly = cy + (r + size * 0.09) * Math.sin(angle(i));
           const rank = b.key === pendingKey && pendingNext ? pendingNext : (hatsu?.[b.key] || 'E');
           const isActive = i === activeIdx, isPending = i === pendingIdx;
           const col = isPending ? pendingColor : (isActive ? activeColor : '#a0b8cc');
@@ -412,8 +435,8 @@ function useHoldAction(action, enabled, { initialDelay = 400, minInterval = 40, 
 }
 
 // ─── StatRow ───────────────────────────────────────────────────────────
+// FIX: STAT_MAX déplacé en constante globale (ligne ~46)
 function StatRow({ label, value, onInc, onDec, color, canInc, canDec, limitbreak }) {
-  const STAT_MAX = 1200;
   const limitRatio = STAT_LIMIT / STAT_MAX;
   const statPercentage = Math.min((value / STAT_MAX) * 100, 100);
   const atLimit = !limitbreak && value >= STAT_LIMIT;
@@ -614,7 +637,7 @@ export default function App() {
     setLocalStats(prev => {
       const cur = prev[k] || 0;
       if (!limitbreak && cur >= STAT_LIMIT) return prev;
-      if (cur >= 1200) return prev;
+      if (cur >= STAT_MAX) return prev;
       return { ...prev, [k]: cur + 1 };
     });
   }, [pointsLeft, isInfinitePoints, profile?.limitbreak]);
@@ -734,13 +757,13 @@ export default function App() {
         backgroundSize: '40px 40px',
       }} />
 
-      <div style={{ position: 'relative', zIndex: 1, maxWidth: 640, margin: '0 auto', paddingBottom: 40 }}>
+      <div style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: '100%', minHeight: '100vh', paddingBottom: isWideScreen ? 20 : 10 }}>
 
         {/* ── HEADER BAND ── */}
-        <div style={{ background: 'linear-gradient(180deg, #0d1e2e 0%, #091420 100%)', borderBottom: '1px solid #1a2d40', padding: '10px 14px 0' }}>
+        <div style={{ background: 'linear-gradient(180deg, #0d1e2e 0%, #091420 100%)', borderBottom: '1px solid #1a2d40', padding: isWideScreen ? '12px 20px 0' : '8px 10px 0' }}>
 
           {/* Top info bar */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isWideScreen ? 12 : 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ width: 28, height: 28, border: `1px solid ${nenColor}60`, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', background: nenColor + '15' }}>
                 <svg width={14} height={14} viewBox="0 0 14 14">
@@ -760,10 +783,10 @@ export default function App() {
           </div>
 
           {/* Character info row */}
-          <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start', marginBottom: 0 }}>
+          <div style={{ display: 'flex', gap: isWideScreen ? 16 : 10, alignItems: 'flex-start', marginBottom: 0 }}>
             {/* Portrait */}
             <div
-              style={{ position: 'relative', width: 90, height: 115, flexShrink: 0, borderRadius: 4, overflow: 'hidden', border: `1px solid ${nenColor}50`, cursor: 'pointer', background: '#0d1824' }}
+              style={{ position: 'relative', width: isWideScreen ? 110 : 80, height: isWideScreen ? 140 : 100, flexShrink: 0, borderRadius: 4, overflow: 'hidden', border: `1px solid ${nenColor}50`, cursor: 'pointer', background: '#0d1824' }}
               onMouseEnter={() => setImageHover(true)}
               onMouseLeave={() => setImageHover(false)}
               onClick={() => setImageEditMode(true)}
@@ -785,8 +808,8 @@ export default function App() {
             <div style={{ flex: 1, paddingTop: 2 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
                 <div>
-                  {profile.char_surname && <div style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 11, color: '#4a7090', letterSpacing: 3, textTransform: 'uppercase' }}>{profile.char_surname}</div>}
-                  <div style={{ fontFamily: 'Oswald, sans-serif', fontSize: 22, fontWeight: '700', color: '#e8f4ff', letterSpacing: 1, lineHeight: 1.1 }}>
+                  {profile.char_surname && <div style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: isWideScreen ? 12 : 10, color: '#4a7090', letterSpacing: 3, textTransform: 'uppercase' }}>{profile.char_surname}</div>}
+                  <div style={{ fontFamily: 'Oswald, sans-serif', fontSize: isWideScreen ? 26 : 20, fontWeight: '700', color: '#e8f4ff', letterSpacing: 1, lineHeight: 1.1 }}>
                     {profile.char_name || <span style={{ color: '#2a3a4a' }}>Sans nom</span>}
                   </div>
                 </div>
@@ -852,7 +875,7 @@ export default function App() {
         </div>
 
         {/* ── TAB CONTENT ── */}
-        <div style={{ padding: '14px 14px', minHeight: 300 }} className="ac-card">
+        <div style={{ padding: isWideScreen ? '16px 20px' : '12px 10px', minHeight: isWideScreen ? 400 : 300 }} className="ac-card">
 
           {/* PROFIL TAB */}
           {activeTab === 'PROFIL' && (
@@ -898,7 +921,7 @@ export default function App() {
                           const rank = profile.hatsu_affinities?.[b.key] ?? 'E';
                           const blocked = rank === '✖' || rank === 'Z' || (profile.affinity_points ?? 0) <= 0 || savingAffinity;
                           const rankImg = RANK_IMAGES[rank];
-                          const bColor = blocked ? '#1e2d3d' : nenColor;
+                          // FIX: bColor était déclaré mais jamais utilisé — supprimé
                           return (
                             <button key={b.key} disabled={blocked} onClick={() => upgradeAffinity(b.key)} className="ac-btn"
                               style={{ background: '#0d1824', border: `1px solid ${blocked ? '#1a2535' : nenColor + '50'}`, borderRadius: 3, padding: '8px 10px', cursor: blocked ? 'default' : 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontFamily: 'Oswald, sans-serif', fontSize: 11, letterSpacing: 1, color: blocked ? '#2a3a4a' : nenColor, transition: 'all 0.15s' }}>
