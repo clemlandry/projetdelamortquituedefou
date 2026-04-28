@@ -1121,7 +1121,7 @@ function TechniquesTab({ techniques, loading, nenColor }) {
               }}>
 
               {/* Vignette gif compacte */}
-              <div style={{ width: 44, height: 44, flexShrink: 0, borderRadius: 3, overflow: 'hidden', background: '#060f18', border: `1px solid ${rankColor}30` }}>
+              <div style={{ width: 44, height: 44, flexShrink: 0, borderRadius: 3, overflow: 'hidden', background: '#060f18' }}>
                 {t.image_url
                   ? <img src={proxyImg(t.image_url)} alt={t.name}
                       style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
@@ -1183,11 +1183,6 @@ function TechniquesTab({ techniques, loading, nenColor }) {
               <div>
                 <div style={{ borderTop: `1px solid ${rankColor}20`, padding: '10px 12px 12px' }}>
                   <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                    {t.image_url && (
-                      <img src={proxyImg(t.image_url)} alt={t.name}
-                        style={{ maxWidth: 120, maxHeight: 120, flexShrink: 0, borderRadius: 3, border: `1px solid ${rankColor}30`, display: 'block' }}
-                        onError={e => { e.target.style.display = 'none'; }} />
-                    )}
                     <div style={{ flex: 1, minWidth: 120 }}>
                       {t.description
                         ? <div style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 12, color: '#8aa0b8', lineHeight: 1.65, padding: '8px 10px', background: '#060f18', border: '1px solid #1a2d40', borderRadius: 3 }}>
@@ -1196,6 +1191,11 @@ function TechniquesTab({ techniques, loading, nenColor }) {
                         : <div style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 11, color: '#2a3a4a', fontStyle: 'italic' }}>Aucune description.</div>
                       }
                     </div>
+                    {t.image_url && (
+                      <img src={proxyImg(t.image_url)} alt={t.name}
+                        style={{ maxWidth: 160, maxHeight: 160, flexShrink: 0, borderRadius: 3, border: `1px solid ${rankColor}30`, display: 'block' }}
+                        onError={e => { e.target.style.display = 'none'; }} />
+                    )}
                   </div>
                 </div>
               </div>
