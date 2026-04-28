@@ -1122,7 +1122,7 @@ function TechniquesTab({ techniques, loading, nenColor }) {
               }}>
                 {t.image_url
                   ? <img src={proxyImg(t.image_url)} alt={t.name}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                      style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
                       onError={e => { e.target.style.display = 'none'; }} />
                   : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.12 }}>
                       <svg width={28} height={28} viewBox="0 0 28 28">
