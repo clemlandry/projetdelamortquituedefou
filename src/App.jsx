@@ -1134,12 +1134,12 @@ function TechniquesTab({ techniques, loading, nenColor }) {
                 }
               </div>
 
-              {/* Nom + types */}
+              {/* Nom + types + coût nen */}
               <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <div style={{ fontFamily: 'Oswald, sans-serif', fontSize: 13, color: '#e8f4ff', letterSpacing: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {t.name}
                 </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, alignItems: 'center' }}>
                   {types.map(type => {
                     const tr = type.trim();
                     const col = NEN_COLORS[tr] || '#7a8fa6';
@@ -1151,6 +1151,18 @@ function TechniquesTab({ techniques, loading, nenColor }) {
                       }}>{tr.toUpperCase()}</span>
                     );
                   })}
+                  {t.nen_cost != null && (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 3,
+                      background: nenColor + '15', border: `1px solid ${nenColor}40`,
+                      borderRadius: 2, padding: '1px 5px',
+                    }}>
+                      <svg width={7} height={7} viewBox="0 0 10 10">
+                        <polygon points="5,0.5 9.5,3 9.5,7 5,9.5 0.5,7 0.5,3" fill="none" stroke={nenColor} strokeWidth={1.5} />
+                      </svg>
+                      <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 8, color: nenColor, letterSpacing: 1 }}>{t.nen_cost} NEN</span>
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -1169,32 +1181,21 @@ function TechniquesTab({ techniques, loading, nenColor }) {
             {/* ── Panneau déroulant ─────────────────────── */}
             <div className={`tech-expand${isOpen ? ' open' : ''}`}>
               <div>
-                <div style={{ borderTop: `1px solid ${rankColor}20` }}>
-                  {/* GIF pleine largeur, hauteur naturelle */}
-                  {t.image_url && (
-                    <img src={proxyImg(t.image_url)} alt={t.name}
-                      style={{ width: '100%', display: 'block' }}
-                      onError={e => { e.target.style.display = 'none'; }} />
-                  )}
-
-                  <div style={{ padding: '10px 12px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {/* Coût Nen */}
-                    {t.nen_cost != null && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, alignSelf: 'flex-start', background: nenColor + '15', border: `1px solid ${nenColor}40`, borderRadius: 3, padding: '3px 8px' }}>
-                        <svg width={9} height={9} viewBox="0 0 10 10">
-                          <polygon points="5,0.5 9.5,3 9.5,7 5,9.5 0.5,7 0.5,3" fill="none" stroke={nenColor} strokeWidth={1} />
-                        </svg>
-                        <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 10, color: nenColor, letterSpacing: 1.5 }}>{t.nen_cost} NEN</span>
-                      </div>
+                <div style={{ borderTop: `1px solid ${rankColor}20`, padding: '10px 12px 12px' }}>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                    {t.image_url && (
+                      <img src={proxyImg(t.image_url)} alt={t.name}
+                        style={{ width: 100, height: 100, objectFit: 'cover', flexShrink: 0, borderRadius: 3, border: `1px solid ${rankColor}30`, display: 'block' }}
+                        onError={e => { e.target.style.display = 'none'; }} />
                     )}
-
-                    {/* Description */}
-                    {t.description
-                      ? <div style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 12, color: '#8aa0b8', lineHeight: 1.65, padding: '8px 10px', background: '#060f18', border: `1px solid #1a2d40`, borderRadius: 3 }}>
-                          {t.description}
-                        </div>
-                      : <div style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 11, color: '#2a3a4a', fontStyle: 'italic' }}>Aucune description.</div>
-                    }
+                    <div style={{ flex: 1, minWidth: 120 }}>
+                      {t.description
+                        ? <div style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 12, color: '#8aa0b8', lineHeight: 1.65, padding: '8px 10px', background: '#060f18', border: '1px solid #1a2d40', borderRadius: 3 }}>
+                            {t.description}
+                          </div>
+                        : <div style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 11, color: '#2a3a4a', fontStyle: 'italic' }}>Aucune description.</div>
+                      }
+                    </div>
                   </div>
                 </div>
               </div>
