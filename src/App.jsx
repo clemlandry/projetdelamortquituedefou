@@ -1121,18 +1121,16 @@ function TechniquesTab({ techniques, loading, nenColor }) {
               }}>
 
               {/* Vignette gif compacte */}
-              <div style={{ width: 44, height: 44, flexShrink: 0, borderRadius: 3, overflow: 'hidden', background: '#060f18' }}>
-                {t.image_url
-                  ? <img src={proxyImg(t.image_url)} alt={t.name}
-                      style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
-                      onError={e => { e.target.style.display = 'none'; }} />
-                  : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.15 }}>
-                      <svg width={18} height={18} viewBox="0 0 18 18">
-                        <polygon points="9,1 17,5 17,13 9,17 1,13 1,5" fill="none" stroke="#4a7090" strokeWidth={1} />
-                      </svg>
-                    </div>
-                }
-              </div>
+              {t.image_url
+                ? <img src={proxyImg(t.image_url)} alt={t.name}
+                    style={{ maxHeight: 48, flexShrink: 0, borderRadius: 3, display: 'block' }}
+                    onError={e => { e.target.style.display = 'none'; }} />
+                : <div style={{ width: 44, height: 44, flexShrink: 0, borderRadius: 3, background: '#060f18', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.15 }}>
+                    <svg width={18} height={18} viewBox="0 0 18 18">
+                      <polygon points="9,1 17,5 17,13 9,17 1,13 1,5" fill="none" stroke="#4a7090" strokeWidth={1} />
+                    </svg>
+                  </div>
+              }
 
               {/* Nom + types + coût nen */}
               <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
