@@ -156,7 +156,7 @@ async function fetchProfile(discordId) {
 }
 
 async function fetchTechniques(discordId) {
-  const rows = await db.select('techniques', { select: 'id,name,description,rank,hatsu_types,image_url', filters: { discord_id: `eq.${discordId}` } });
+  const rows = await db.select('techniques', { select: 'id,name,description,rank,hatsu_types,image_url,nen_cost', filters: { discord_id: `eq.${discordId}` } });
   return Array.isArray(rows) ? rows : [];
 }
 
@@ -1088,123 +1088,172 @@ function TechniquesTab({ techniques, loading, nenColor }) {
 
   return (
     <>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
+      {/* ── Liste verticale, max 7 entrées ─────────────────────── */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {techniques.map(t => {
           const types = Array.isArray(t.hatsu_types) ? t.hatsu_types : (t.hatsu_types ? t.hatsu_types.split(',') : []);
           const rankColor = RANK_COLORS[t.rank] || '#7a8fa6';
-          const rankImg = RANK_IMAGES[t.rank];
+          const rankImg   = RANK_IMAGES[t.rank];
           return (
             <button key={t.id} onClick={() => setSelected(t)} className="ac-btn"
               style={{
-                background: '#0d1824', border: `1px solid ${nenColor}25`,
-                borderTop: `2px solid ${rankColor}`,
-                borderRadius: 4, padding: '10px 10px 12px', cursor: 'pointer',
-                textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 6,
-                transition: 'all 0.15s', position: 'relative', overflow: 'hidden',
+                background: '#0b1520',
+                border: `1px solid ${rankColor}30`,
+                borderLeft: `3px solid ${rankColor}`,
+                borderRadius: 4,
+                cursor: 'pointer',
+                textAlign: 'left',
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'stretch',
+                overflow: 'hidden',
+                transition: 'all 0.15s',
+                minHeight: 72,
+                position: 'relative',
               }}>
-              {/* Rank badge */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+
+              {/* GIF / image thumbnail — toujours visible */}
+              <div style={{
+                width: 80, minWidth: 80,
+                background: '#060f18',
+                overflow: 'hidden',
+                flexShrink: 0,
+                position: 'relative',
+              }}>
+                {t.image_url
+                  ? <img src={proxyImg(t.image_url)} alt={t.name}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                      onError={e => { e.target.style.display = 'none'; }} />
+                  : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.12 }}>
+                      <svg width={28} height={28} viewBox="0 0 28 28">
+                        <polygon points="14,2 26,8 26,20 14,26 2,20 2,8" fill="none" stroke="#4a7090" strokeWidth={1.2} />
+                      </svg>
+                    </div>
+                }
+                {/* rank badge en overlay sur la vignette */}
+                <div style={{ position: 'absolute', bottom: 4, right: 4, background: '#060f18cc', borderRadius: 2, padding: '1px 4px', display: 'flex', alignItems: 'center' }}>
                   {rankImg
-                    ? <img src={rankImg} alt={t.rank} style={{ width: 18, height: 18 }} />
-                    : <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 12, color: rankColor, fontWeight: '700' }}>{t.rank || '?'}</span>}
+                    ? <img src={rankImg} alt={t.rank} style={{ width: 14, height: 14 }} />
+                    : <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 10, color: rankColor, fontWeight: 700 }}>{t.rank}</span>}
                 </div>
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: rankColor, boxShadow: `0 0 6px ${rankColor}` }} />
               </div>
-              {/* Name */}
-              <div style={{ fontFamily: 'Oswald, sans-serif', fontSize: 12, color: '#e8f4ff', letterSpacing: 1, lineHeight: 1.3, wordBreak: 'break-word' }}>
-                {t.name}
-              </div>
-              {/* Hatsu types */}
-              {types.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-                  {types.map(type => {
-                    const trimmed = type.trim();
-                    const col = NEN_COLORS[trimmed] || '#7a8fa6';
-                    return (
-                      <span key={trimmed} style={{
-                        fontFamily: 'Oswald, sans-serif', fontSize: 8, letterSpacing: 1,
-                        color: col, background: col + '18', border: `1px solid ${col}40`,
-                        borderRadius: 2, padding: '2px 5px',
-                      }}>{trimmed.toUpperCase()}</span>
-                    );
-                  })}
+
+              {/* Infos droite */}
+              <div style={{ flex: 1, padding: '8px 10px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 5, minWidth: 0 }}>
+                {/* Nom */}
+                <div style={{ fontFamily: 'Oswald, sans-serif', fontSize: 13, color: '#e8f4ff', letterSpacing: 1, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {t.name}
                 </div>
-              )}
-              {/* Subtle glow overlay */}
-              <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${rankColor}06 0%, transparent 60%)`, pointerEvents: 'none' }} />
+
+                {/* Types Hatsu */}
+                {types.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+                    {types.map(type => {
+                      const trimmed = type.trim();
+                      const col = NEN_COLORS[trimmed] || '#7a8fa6';
+                      return (
+                        <span key={trimmed} style={{
+                          fontFamily: 'Oswald, sans-serif', fontSize: 8, letterSpacing: 0.8,
+                          color: col, background: col + '18', border: `1px solid ${col}40`,
+                          borderRadius: 2, padding: '1px 5px',
+                        }}>{trimmed.toUpperCase()}</span>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Coût Nen */}
+                {t.nen_cost != null && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <svg width={10} height={10} viewBox="0 0 10 10" style={{ flexShrink: 0 }}>
+                      <polygon points="5,0.5 9.5,3 9.5,7 5,9.5 0.5,7 0.5,3" fill="none" stroke={nenColor} strokeWidth={1} />
+                    </svg>
+                    <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 10, color: nenColor, letterSpacing: 1 }}>
+                      {t.nen_cost} NEN
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Glow overlay */}
+              <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(90deg, ${rankColor}08 0%, transparent 40%)`, pointerEvents: 'none' }} />
             </button>
           );
         })}
       </div>
 
-      {/* TECHNIQUE DETAIL MODAL */}
-      {selected && (
-        <div style={S.modalBg} onClick={() => setSelected(null)}>
-          <div style={{ ...S.modal, maxWidth: 380, maxHeight: '85vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-            {/* Header rank bar */}
-            {(() => {
-              const rankColor = RANK_COLORS[selected.rank] || '#7a8fa6';
-              const rankImg = RANK_IMAGES[selected.rank];
-              const types = Array.isArray(selected.hatsu_types) ? selected.hatsu_types : (selected.hatsu_types ? selected.hatsu_types.split(',') : []);
-              return (
-                <>
-                  <div style={{ height: 3, background: `linear-gradient(90deg, ${rankColor}, ${rankColor}40)`, marginTop: -22, marginLeft: -22, marginRight: -22, marginBottom: 18, borderRadius: '5px 5px 0 0' }} />
-                  {/* Image / gif */}
-                  {selected.image_url && (
-                    <div style={{ width: '100%', height: 160, borderRadius: 3, overflow: 'hidden', marginBottom: 14, border: `1px solid ${rankColor}30` }}>
-                      <img src={proxyImg(selected.image_url)} alt={selected.name}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                        onError={e => { e.target.parentElement.style.display = 'none'; }} />
-                    </div>
-                  )}
-                  {/* Title row */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                    <div style={{ fontFamily: 'Oswald, sans-serif', fontSize: 17, color: '#e8f4ff', letterSpacing: 2, flex: 1, lineHeight: 1.2 }}>
-                      {selected.name}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 10, flexShrink: 0 }}>
-                      {rankImg
-                        ? <img src={rankImg} alt={selected.rank} style={{ width: 24, height: 24 }} />
-                        : <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 18, color: rankColor, fontWeight: '700' }}>{selected.rank}</span>}
-                    </div>
+      {/* ── MODAL DÉTAIL ───────────────────────────────────────── */}
+      {selected && (() => {
+        const rankColor = RANK_COLORS[selected.rank] || '#7a8fa6';
+        const rankImg   = RANK_IMAGES[selected.rank];
+        const types     = Array.isArray(selected.hatsu_types) ? selected.hatsu_types : (selected.hatsu_types ? selected.hatsu_types.split(',') : []);
+        return (
+          <div style={S.modalBg} onClick={() => setSelected(null)}>
+            <div style={{ ...S.modal, maxWidth: 370, maxHeight: '88vh', overflowY: 'auto', padding: 0, borderTop: `3px solid ${rankColor}` }}
+              onClick={e => e.stopPropagation()}>
+
+              {/* GIF pleine largeur en haut du modal */}
+              {selected.image_url && (
+                <div style={{ width: '100%', height: 180, overflow: 'hidden', background: '#060f18' }}>
+                  <img src={proxyImg(selected.image_url)} alt={selected.name}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                    onError={e => { e.target.parentElement.style.display = 'none'; }} />
+                </div>
+              )}
+
+              <div style={{ padding: '16px 18px 18px' }}>
+                {/* Titre + rang */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                  <div style={{ fontFamily: 'Oswald, sans-serif', fontSize: 18, color: '#e8f4ff', letterSpacing: 2, flex: 1, lineHeight: 1.2 }}>
+                    {selected.name}
                   </div>
-                  {/* Types */}
-                  {types.length > 0 && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 12 }}>
-                      {types.map(type => {
-                        const trimmed = type.trim();
-                        const col = NEN_COLORS[trimmed] || '#7a8fa6';
-                        return (
-                          <span key={trimmed} style={{
-                            fontFamily: 'Oswald, sans-serif', fontSize: 10, letterSpacing: 1.5,
-                            color: col, background: col + '20', border: `1px solid ${col}50`,
-                            borderRadius: 2, padding: '3px 8px',
-                          }}>◆ {trimmed.toUpperCase()}</span>
-                        );
-                      })}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 10, flexShrink: 0 }}>
+                    {rankImg
+                      ? <img src={rankImg} alt={selected.rank} style={{ width: 26, height: 26 }} />
+                      : <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 20, color: rankColor, fontWeight: 700 }}>{selected.rank}</span>}
+                  </div>
+                </div>
+
+                {/* Coût Nen + Types sur la même ligne */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+                  {selected.nen_cost != null && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: nenColor + '15', border: `1px solid ${nenColor}40`, borderRadius: 3, padding: '3px 8px' }}>
+                      <svg width={10} height={10} viewBox="0 0 10 10">
+                        <polygon points="5,0.5 9.5,3 9.5,7 5,9.5 0.5,7 0.5,3" fill="none" stroke={nenColor} strokeWidth={1} />
+                      </svg>
+                      <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 11, color: nenColor, letterSpacing: 1.5 }}>{selected.nen_cost} NEN</span>
                     </div>
                   )}
-                  {/* Description */}
-                  {selected.description ? (
-                    <div style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 13, color: '#8aa0b8', lineHeight: 1.6, padding: '10px 12px', background: '#060f18', border: `1px solid #1a2d40`, borderRadius: 3 }}>
+                  {types.map(type => {
+                    const trimmed = type.trim();
+                    const col = NEN_COLORS[trimmed] || '#7a8fa6';
+                    return (
+                      <span key={trimmed} style={{
+                        fontFamily: 'Oswald, sans-serif', fontSize: 10, letterSpacing: 1.2,
+                        color: col, background: col + '20', border: `1px solid ${col}50`,
+                        borderRadius: 2, padding: '3px 8px',
+                      }}>◆ {trimmed.toUpperCase()}</span>
+                    );
+                  })}
+                </div>
+
+                {/* Description */}
+                {selected.description
+                  ? <div style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 13, color: '#8aa0b8', lineHeight: 1.65, padding: '10px 12px', background: '#060f18', border: `1px solid #1a2d40`, borderRadius: 3 }}>
                       {selected.description}
                     </div>
-                  ) : (
-                    <div style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 12, color: '#2a3a4a', fontStyle: 'italic' }}>
-                      Aucune description.
-                    </div>
-                  )}
-                  <button onClick={() => setSelected(null)} className="ac-btn"
-                    style={{ ...S.acBtn, width: '100%', marginTop: 16, borderColor: '#1e2d3d', color: '#4a7090', fontSize: 11, letterSpacing: 3 }}>
-                    FERMER
-                  </button>
-                </>
-              );
-            })()}
+                  : <div style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 12, color: '#2a3a4a', fontStyle: 'italic' }}>Aucune description.</div>
+                }
+
+                <button onClick={() => setSelected(null)} className="ac-btn"
+                  style={{ ...S.acBtn, width: '100%', marginTop: 14, borderColor: '#1e2d3d', color: '#4a7090', fontSize: 11, letterSpacing: 3 }}>
+                  FERMER
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </>
   );
 }
