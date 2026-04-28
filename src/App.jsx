@@ -27,6 +27,15 @@ styleEl.textContent = `
   .ac-btn:active { transform: translateY(0); }
   .ac-card { animation: fadeIn 0.3s ease forwards; }
   .hold-btn:active { background: rgba(255,255,255,0.08) !important; }
+  .tech-expand {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.32s ease;
+  }
+  .tech-expand.open {
+    grid-template-rows: 1fr;
+  }
+  .tech-expand > div { overflow: hidden; }
 `;
 document.head.appendChild(styleEl);
 
@@ -1065,7 +1074,7 @@ const RANK_COLORS = {
 };
 
 function TechniquesTab({ techniques, loading, nenColor }) {
-  const [selected, setSelected] = useState(null);
+  const [openId, setOpenId] = useState(null);
 
   if (loading) return (
     <div style={{ color: '#2a3a4a', fontSize: 12, fontFamily: 'Oswald, sans-serif', letterSpacing: 2, textAlign: 'center', padding: 30 }}>
@@ -1087,174 +1096,113 @@ function TechniquesTab({ techniques, loading, nenColor }) {
   );
 
   return (
-    <>
-      {/* ── Liste verticale, max 7 entrées ─────────────────────── */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {techniques.map(t => {
-          const types = Array.isArray(t.hatsu_types) ? t.hatsu_types : (t.hatsu_types ? t.hatsu_types.split(',') : []);
-          const rankColor = RANK_COLORS[t.rank] || '#7a8fa6';
-          const rankImg   = RANK_IMAGES[t.rank];
-          return (
-            <button key={t.id} onClick={() => setSelected(t)} className="ac-btn"
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {techniques.map(t => {
+        const types     = Array.isArray(t.hatsu_types) ? t.hatsu_types : (t.hatsu_types ? t.hatsu_types.split(',') : []);
+        const rankColor = RANK_COLORS[t.rank] || '#7a8fa6';
+        const rankImg   = RANK_IMAGES[t.rank];
+        const isOpen    = openId === t.id;
+
+        return (
+          <div key={t.id} style={{
+            border: `1px solid ${isOpen ? rankColor + '60' : rankColor + '25'}`,
+            borderLeft: `3px solid ${rankColor}`,
+            borderRadius: 4,
+            background: '#0b1520',
+            overflow: 'hidden',
+            transition: 'border-color 0.25s',
+          }}>
+            {/* ── Header cliquable ─────────────────────── */}
+            <button onClick={() => setOpenId(isOpen ? null : t.id)} className="ac-btn"
               style={{
-                background: '#0b1520',
-                border: `1px solid ${rankColor}30`,
-                borderLeft: `3px solid ${rankColor}`,
-                borderRadius: 4,
-                cursor: 'pointer',
+                width: '100%', background: 'none', border: 'none', cursor: 'pointer',
+                padding: '9px 10px', display: 'flex', alignItems: 'center', gap: 8,
                 textAlign: 'left',
-                display: 'flex',
-                flexDirection: 'row',
-                alignItems: 'stretch',
-                overflow: 'hidden',
-                transition: 'all 0.15s',
-                minHeight: 72,
-                position: 'relative',
               }}>
 
-              {/* GIF / image thumbnail — toujours visible */}
-              <div style={{
-                width: 80, minWidth: 80,
-                background: '#060f18',
-                overflow: 'hidden',
-                flexShrink: 0,
-                position: 'relative',
-              }}>
+              {/* Vignette gif compacte */}
+              <div style={{ width: 44, height: 44, flexShrink: 0, borderRadius: 3, overflow: 'hidden', background: '#060f18', border: `1px solid ${rankColor}30` }}>
                 {t.image_url
                   ? <img src={proxyImg(t.image_url)} alt={t.name}
-                      style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                       onError={e => { e.target.style.display = 'none'; }} />
-                  : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.12 }}>
-                      <svg width={28} height={28} viewBox="0 0 28 28">
-                        <polygon points="14,2 26,8 26,20 14,26 2,20 2,8" fill="none" stroke="#4a7090" strokeWidth={1.2} />
+                  : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.15 }}>
+                      <svg width={18} height={18} viewBox="0 0 18 18">
+                        <polygon points="9,1 17,5 17,13 9,17 1,13 1,5" fill="none" stroke="#4a7090" strokeWidth={1} />
                       </svg>
                     </div>
                 }
-                {/* rank badge en overlay sur la vignette */}
-                <div style={{ position: 'absolute', bottom: 4, right: 4, background: '#060f18cc', borderRadius: 2, padding: '1px 4px', display: 'flex', alignItems: 'center' }}>
-                  {rankImg
-                    ? <img src={rankImg} alt={t.rank} style={{ width: 14, height: 14 }} />
-                    : <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 10, color: rankColor, fontWeight: 700 }}>{t.rank}</span>}
-                </div>
               </div>
 
-              {/* Infos droite */}
-              <div style={{ flex: 1, padding: '8px 10px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 5, minWidth: 0 }}>
-                {/* Nom */}
-                <div style={{ fontFamily: 'Oswald, sans-serif', fontSize: 13, color: '#e8f4ff', letterSpacing: 1, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {/* Nom + types */}
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ fontFamily: 'Oswald, sans-serif', fontSize: 13, color: '#e8f4ff', letterSpacing: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {t.name}
                 </div>
-
-                {/* Types Hatsu */}
-                {types.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-                    {types.map(type => {
-                      const trimmed = type.trim();
-                      const col = NEN_COLORS[trimmed] || '#7a8fa6';
-                      return (
-                        <span key={trimmed} style={{
-                          fontFamily: 'Oswald, sans-serif', fontSize: 8, letterSpacing: 0.8,
-                          color: col, background: col + '18', border: `1px solid ${col}40`,
-                          borderRadius: 2, padding: '1px 5px',
-                        }}>{trimmed.toUpperCase()}</span>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* Coût Nen */}
-                {t.nen_cost != null && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <svg width={10} height={10} viewBox="0 0 10 10" style={{ flexShrink: 0 }}>
-                      <polygon points="5,0.5 9.5,3 9.5,7 5,9.5 0.5,7 0.5,3" fill="none" stroke={nenColor} strokeWidth={1} />
-                    </svg>
-                    <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 10, color: nenColor, letterSpacing: 1 }}>
-                      {t.nen_cost} NEN
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Glow overlay */}
-              <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(90deg, ${rankColor}08 0%, transparent 40%)`, pointerEvents: 'none' }} />
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ── MODAL DÉTAIL ───────────────────────────────────────── */}
-      {selected && (() => {
-        const rankColor = RANK_COLORS[selected.rank] || '#7a8fa6';
-        const rankImg   = RANK_IMAGES[selected.rank];
-        const types     = Array.isArray(selected.hatsu_types) ? selected.hatsu_types : (selected.hatsu_types ? selected.hatsu_types.split(',') : []);
-        return (
-          <div style={S.modalBg} onClick={() => setSelected(null)}>
-            <div style={{ ...S.modal, maxWidth: 370, maxHeight: '88vh', overflowY: 'auto', padding: 0, borderTop: `3px solid ${rankColor}` }}
-              onClick={e => e.stopPropagation()}>
-
-              {/* GIF pleine largeur en haut du modal */}
-              {selected.image_url && (
-                <div style={{ width: '100%', height: 180, overflow: 'hidden', background: '#060f18' }}>
-                  <img src={proxyImg(selected.image_url)} alt={selected.name}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                    onError={e => { e.target.parentElement.style.display = 'none'; }} />
-                </div>
-              )}
-
-              <div style={{ padding: '16px 18px 18px' }}>
-                {/* Titre + rang */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                  <div style={{ fontFamily: 'Oswald, sans-serif', fontSize: 18, color: '#e8f4ff', letterSpacing: 2, flex: 1, lineHeight: 1.2 }}>
-                    {selected.name}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 10, flexShrink: 0 }}>
-                    {rankImg
-                      ? <img src={rankImg} alt={selected.rank} style={{ width: 26, height: 26 }} />
-                      : <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 20, color: rankColor, fontWeight: 700 }}>{selected.rank}</span>}
-                  </div>
-                </div>
-
-                {/* Coût Nen + Types sur la même ligne */}
-                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginBottom: 12 }}>
-                  {selected.nen_cost != null && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: nenColor + '15', border: `1px solid ${nenColor}40`, borderRadius: 3, padding: '3px 8px' }}>
-                      <svg width={10} height={10} viewBox="0 0 10 10">
-                        <polygon points="5,0.5 9.5,3 9.5,7 5,9.5 0.5,7 0.5,3" fill="none" stroke={nenColor} strokeWidth={1} />
-                      </svg>
-                      <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 11, color: nenColor, letterSpacing: 1.5 }}>{selected.nen_cost} NEN</span>
-                    </div>
-                  )}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
                   {types.map(type => {
-                    const trimmed = type.trim();
-                    const col = NEN_COLORS[trimmed] || '#7a8fa6';
+                    const tr = type.trim();
+                    const col = NEN_COLORS[tr] || '#7a8fa6';
                     return (
-                      <span key={trimmed} style={{
-                        fontFamily: 'Oswald, sans-serif', fontSize: 10, letterSpacing: 1.2,
-                        color: col, background: col + '20', border: `1px solid ${col}50`,
-                        borderRadius: 2, padding: '3px 8px',
-                      }}>◆ {trimmed.toUpperCase()}</span>
+                      <span key={tr} style={{
+                        fontFamily: 'Oswald, sans-serif', fontSize: 8, letterSpacing: 0.8,
+                        color: col, background: col + '18', border: `1px solid ${col}40`,
+                        borderRadius: 2, padding: '1px 5px',
+                      }}>{tr.toUpperCase()}</span>
                     );
                   })}
                 </div>
+              </div>
 
-                {/* Description */}
-                {selected.description
-                  ? <div style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 13, color: '#8aa0b8', lineHeight: 1.65, padding: '10px 12px', background: '#060f18', border: `1px solid #1a2d40`, borderRadius: 3 }}>
-                      {selected.description}
-                    </div>
-                  : <div style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 12, color: '#2a3a4a', fontStyle: 'italic' }}>Aucune description.</div>
-                }
+              {/* Rang + chevron */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                {rankImg
+                  ? <img src={rankImg} alt={t.rank} style={{ width: 16, height: 16 }} />
+                  : <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 11, color: rankColor, fontWeight: 700 }}>{t.rank}</span>}
+                <svg width={10} height={10} viewBox="0 0 10 10"
+                  style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.25s', opacity: 0.5 }}>
+                  <polyline points="2,3 5,7 8,3" fill="none" stroke="#8aa0b8" strokeWidth={1.5} strokeLinecap="round" />
+                </svg>
+              </div>
+            </button>
 
-                <button onClick={() => setSelected(null)} className="ac-btn"
-                  style={{ ...S.acBtn, width: '100%', marginTop: 14, borderColor: '#1e2d3d', color: '#4a7090', fontSize: 11, letterSpacing: 3 }}>
-                  FERMER
-                </button>
+            {/* ── Panneau déroulant ─────────────────────── */}
+            <div className={`tech-expand${isOpen ? ' open' : ''}`}>
+              <div>
+                <div style={{ borderTop: `1px solid ${rankColor}20` }}>
+                  {/* GIF pleine largeur, hauteur naturelle */}
+                  {t.image_url && (
+                    <img src={proxyImg(t.image_url)} alt={t.name}
+                      style={{ width: '100%', display: 'block' }}
+                      onError={e => { e.target.style.display = 'none'; }} />
+                  )}
+
+                  <div style={{ padding: '10px 12px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {/* Coût Nen */}
+                    {t.nen_cost != null && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, alignSelf: 'flex-start', background: nenColor + '15', border: `1px solid ${nenColor}40`, borderRadius: 3, padding: '3px 8px' }}>
+                        <svg width={9} height={9} viewBox="0 0 10 10">
+                          <polygon points="5,0.5 9.5,3 9.5,7 5,9.5 0.5,7 0.5,3" fill="none" stroke={nenColor} strokeWidth={1} />
+                        </svg>
+                        <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 10, color: nenColor, letterSpacing: 1.5 }}>{t.nen_cost} NEN</span>
+                      </div>
+                    )}
+
+                    {/* Description */}
+                    {t.description
+                      ? <div style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 12, color: '#8aa0b8', lineHeight: 1.65, padding: '8px 10px', background: '#060f18', border: `1px solid #1a2d40`, borderRadius: 3 }}>
+                          {t.description}
+                        </div>
+                      : <div style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 11, color: '#2a3a4a', fontStyle: 'italic' }}>Aucune description.</div>
+                    }
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         );
-      })()}
-    </>
+      })}
+    </div>
   );
 }
 
