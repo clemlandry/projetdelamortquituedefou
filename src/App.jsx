@@ -156,7 +156,7 @@ async function fetchProfile(discordId) {
 }
 
 async function fetchTechniques(discordId) {
-  const rows = await db.select('techniques', { select: '*', filters: { discord_id: `eq.${discordId}` } });
+  const rows = await db.select('techniques', { select: 'id,name,description,rank,hatsu_types,image_url', filters: { discord_id: `eq.${discordId}` } });
   return Array.isArray(rows) ? rows : [];
 }
 
@@ -1000,24 +1000,11 @@ export default function App() {
 
           {/* TECHNIQUES TAB */}
           {activeTab === 'TECHNIQUES' && (
-            <div>
-              {techniquesLoading ? (
-                <div style={{ color: '#2a3a4a', fontSize: 12, fontFamily: 'Oswald, sans-serif', letterSpacing: 2, textAlign: 'center', padding: 30 }}>CHARGEMENT...</div>
-              ) : profile.techniques?.length > 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {profile.techniques.map(t => (
-                    <div key={t.id} style={{ padding: '12px 14px', background: '#0d1824', border: `1px solid ${nenColor}30`, borderRadius: 4, borderLeft: `3px solid ${nenColor}` }}>
-                      <div style={{ fontFamily: 'Oswald, sans-serif', fontSize: 14, color: '#e8f4ff', letterSpacing: 1 }}>{t.name}</div>
-                      {t.description && <div style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 12, color: '#4a7090', marginTop: 4 }}>{t.description}</div>}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div style={{ color: '#2a3a4a', fontSize: 12, fontFamily: 'Oswald, sans-serif', letterSpacing: 2, textAlign: 'center', padding: '40px 0' }}>
-                  AUCUNE TECHNIQUE
-                </div>
-              )}
-            </div>
+            <TechniquesTab
+              techniques={profile.techniques}
+              loading={techniquesLoading}
+              nenColor={nenColor}
+            />
           )}
         </div>
       </div>
@@ -1068,6 +1055,157 @@ export default function App() {
         </div>
       )}
     </div>
+  );
+}
+
+// ─── Techniques Tab ────────────────────────────────────────────────────
+const RANK_COLORS = {
+  E: '#7a8fa6', D: '#4cc9f0', C: '#2dc653', B: '#ffd60a',
+  A: '#e85d04', S: '#f72585', SS: '#9b5de5', SSS: '#ff6644', Z: '#ffffff',
+};
+
+function TechniquesTab({ techniques, loading, nenColor }) {
+  const [selected, setSelected] = useState(null);
+
+  if (loading) return (
+    <div style={{ color: '#2a3a4a', fontSize: 12, fontFamily: 'Oswald, sans-serif', letterSpacing: 2, textAlign: 'center', padding: 30 }}>
+      CHARGEMENT...
+    </div>
+  );
+
+  if (!techniques?.length) return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '50px 0', gap: 10 }}>
+      <svg width={40} height={40} viewBox="0 0 40 40" opacity={0.15}>
+        <polygon points="20,3 37,12 37,28 20,37 3,28 3,12" fill="none" stroke="#4a7090" strokeWidth={1.5} />
+        <polygon points="20,11 29,16 29,24 20,29 11,24 11,16" fill="none" stroke="#4a7090" strokeWidth={1} />
+      </svg>
+      <div style={{ color: '#2a3a4a', fontSize: 11, fontFamily: 'Oswald, sans-serif', letterSpacing: 3 }}>AUCUNE TECHNIQUE</div>
+      <div style={{ color: '#1e2d3d', fontSize: 10, fontFamily: 'Rajdhani, sans-serif', letterSpacing: 1, marginTop: 2 }}>
+        Utilisez /technique créer sur le bot
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
+        {techniques.map(t => {
+          const types = Array.isArray(t.hatsu_types) ? t.hatsu_types : (t.hatsu_types ? t.hatsu_types.split(',') : []);
+          const rankColor = RANK_COLORS[t.rank] || '#7a8fa6';
+          const rankImg = RANK_IMAGES[t.rank];
+          return (
+            <button key={t.id} onClick={() => setSelected(t)} className="ac-btn"
+              style={{
+                background: '#0d1824', border: `1px solid ${nenColor}25`,
+                borderTop: `2px solid ${rankColor}`,
+                borderRadius: 4, padding: '10px 10px 12px', cursor: 'pointer',
+                textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 6,
+                transition: 'all 0.15s', position: 'relative', overflow: 'hidden',
+              }}>
+              {/* Rank badge */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  {rankImg
+                    ? <img src={rankImg} alt={t.rank} style={{ width: 18, height: 18 }} />
+                    : <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 12, color: rankColor, fontWeight: '700' }}>{t.rank || '?'}</span>}
+                </div>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: rankColor, boxShadow: `0 0 6px ${rankColor}` }} />
+              </div>
+              {/* Name */}
+              <div style={{ fontFamily: 'Oswald, sans-serif', fontSize: 12, color: '#e8f4ff', letterSpacing: 1, lineHeight: 1.3, wordBreak: 'break-word' }}>
+                {t.name}
+              </div>
+              {/* Hatsu types */}
+              {types.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+                  {types.map(type => {
+                    const trimmed = type.trim();
+                    const col = NEN_COLORS[trimmed] || '#7a8fa6';
+                    return (
+                      <span key={trimmed} style={{
+                        fontFamily: 'Oswald, sans-serif', fontSize: 8, letterSpacing: 1,
+                        color: col, background: col + '18', border: `1px solid ${col}40`,
+                        borderRadius: 2, padding: '2px 5px',
+                      }}>{trimmed.toUpperCase()}</span>
+                    );
+                  })}
+                </div>
+              )}
+              {/* Subtle glow overlay */}
+              <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(135deg, ${rankColor}06 0%, transparent 60%)`, pointerEvents: 'none' }} />
+            </button>
+          );
+        })}
+      </div>
+
+      {/* TECHNIQUE DETAIL MODAL */}
+      {selected && (
+        <div style={S.modalBg} onClick={() => setSelected(null)}>
+          <div style={{ ...S.modal, maxWidth: 380, maxHeight: '85vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            {/* Header rank bar */}
+            {(() => {
+              const rankColor = RANK_COLORS[selected.rank] || '#7a8fa6';
+              const rankImg = RANK_IMAGES[selected.rank];
+              const types = Array.isArray(selected.hatsu_types) ? selected.hatsu_types : (selected.hatsu_types ? selected.hatsu_types.split(',') : []);
+              return (
+                <>
+                  <div style={{ height: 3, background: `linear-gradient(90deg, ${rankColor}, ${rankColor}40)`, marginTop: -22, marginLeft: -22, marginRight: -22, marginBottom: 18, borderRadius: '5px 5px 0 0' }} />
+                  {/* Image / gif */}
+                  {selected.image_url && (
+                    <div style={{ width: '100%', height: 160, borderRadius: 3, overflow: 'hidden', marginBottom: 14, border: `1px solid ${rankColor}30` }}>
+                      <img src={proxyImg(selected.image_url)} alt={selected.name}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                        onError={e => { e.target.parentElement.style.display = 'none'; }} />
+                    </div>
+                  )}
+                  {/* Title row */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                    <div style={{ fontFamily: 'Oswald, sans-serif', fontSize: 17, color: '#e8f4ff', letterSpacing: 2, flex: 1, lineHeight: 1.2 }}>
+                      {selected.name}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 10, flexShrink: 0 }}>
+                      {rankImg
+                        ? <img src={rankImg} alt={selected.rank} style={{ width: 24, height: 24 }} />
+                        : <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 18, color: rankColor, fontWeight: '700' }}>{selected.rank}</span>}
+                    </div>
+                  </div>
+                  {/* Types */}
+                  {types.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 12 }}>
+                      {types.map(type => {
+                        const trimmed = type.trim();
+                        const col = NEN_COLORS[trimmed] || '#7a8fa6';
+                        return (
+                          <span key={trimmed} style={{
+                            fontFamily: 'Oswald, sans-serif', fontSize: 10, letterSpacing: 1.5,
+                            color: col, background: col + '20', border: `1px solid ${col}50`,
+                            borderRadius: 2, padding: '3px 8px',
+                          }}>◆ {trimmed.toUpperCase()}</span>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {/* Description */}
+                  {selected.description ? (
+                    <div style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 13, color: '#8aa0b8', lineHeight: 1.6, padding: '10px 12px', background: '#060f18', border: `1px solid #1a2d40`, borderRadius: 3 }}>
+                      {selected.description}
+                    </div>
+                  ) : (
+                    <div style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 12, color: '#2a3a4a', fontStyle: 'italic' }}>
+                      Aucune description.
+                    </div>
+                  )}
+                  <button onClick={() => setSelected(null)} className="ac-btn"
+                    style={{ ...S.acBtn, width: '100%', marginTop: 16, borderColor: '#1e2d3d', color: '#4a7090', fontSize: 11, letterSpacing: 3 }}>
+                    FERMER
+                  </button>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
