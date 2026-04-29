@@ -701,7 +701,7 @@ function InventoryModal({ discordId, nenColor, onClose }) {
               </span>
             ) : (
               <span style={{ fontSize: 10, color: '#2a4055', fontFamily: 'Oswald, sans-serif', letterSpacing: 1 }}>
-                TAP = SÉLECTIONNER · TAP ×2 = FICHE
+                TAP = DÉPLACER · TAP ×2 = INFORMATION
               </span>
             )}
           </div>
