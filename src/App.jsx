@@ -212,6 +212,19 @@ async function fetchShop(channelId) {
   return Array.isArray(rows) ? rows : [];
 }
 
+// Charge le nom d'une boutique depuis shop_meta
+async function fetchShopMeta(channelId) {
+  try {
+    const rows = await db.select('shop_meta', {
+      select: 'name',
+      filters: { channel_id: `eq.${channelId}` },
+    });
+    return rows?.[0]?.name ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // ─── Radar Chart ───────────────────────────────────────────────────────
 function RadarChart({ labels, values, color, title }) {
   const containerRef = useRef(null);
@@ -794,13 +807,18 @@ function InventoryModal({ discordId, nenColor, onClose }) {
 // ─── BOUTIQUE ──────────────────────────────────────────────────────────
 function ShopModal({ discordId, location, jenny, onClose, onPurchase }) {
   const [shopRows, setShopRows] = useState(null);
+  const [shopName, setShopName] = useState(null);
   const [buying, setBuying] = useState(null); // item_id en cours d'achat
   const [feedback, setFeedback] = useState(null); // { type: 'ok'|'err', msg }
 
   useEffect(() => {
     (async () => {
-      const rows = await fetchShop(location);
+      const [rows, meta] = await Promise.all([
+        fetchShop(location),
+        fetchShopMeta(location),
+      ]);
       setShopRows(rows);
+      setShopName(meta);
     })();
   }, [location]);
 
@@ -870,7 +888,7 @@ function ShopModal({ discordId, location, jenny, onClose, onPurchase }) {
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px 12px', flexShrink: 0, borderBottom: '1px solid #1a2d40' }}>
           <div>
-            <div style={{ fontFamily: 'Oswald, sans-serif', fontSize: 14, letterSpacing: 3, color: '#8aa0b8' }}>◈ BOUTIQUE</div>
+            <div style={{ fontFamily: 'Oswald, sans-serif', fontSize: 14, letterSpacing: 3, color: '#8aa0b8' }}>◈ {shopName ?? 'BOUTIQUE'}</div>
             <div style={{ fontSize: 10, color: '#3a5060', fontFamily: 'Rajdhani, sans-serif', letterSpacing: 1, marginTop: 1 }}>{location}</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
