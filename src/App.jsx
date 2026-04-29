@@ -549,12 +549,16 @@ function TabBar({ active, onChange }) {
 
 // ─── INVENTAIRE ────────────────────────────────────────────────────────
 function InventoryModal({ discordId, nenColor, onClose }) {
-  const [invRows, setInvRows] = useState(null); // null = pas chargé
-  const [slots, setSlots] = useState(Array(INV_SLOTS).fill(null)); // slot index → invRow | null
-  const [tooltip, setTooltip] = useState(null); // { item, x, y }
-  const [dragSrc, setDragSrc] = useState(null); // index slot source
+  const [invRows, setInvRows] = useState(null);
+  const [slots, setSlots] = useState(Array(INV_SLOTS).fill(null));
+  const [tooltip, setTooltip] = useState(null); // desktop: { item, row, x, y }
+  const [dragSrc, setDragSrc] = useState(null); // desktop drag source index
+
+  // Mobile-exclusive state
+  const [selectedIdx, setSelectedIdx] = useState(null); // tap-to-select source
+  const [itemDrawer, setItemDrawer] = useState(null);   // { item, row } — bottom description drawer
+
   const [saving, setSaving] = useState(false);
-  const touchHoldRef = useRef(null);
   const isMobile = window.innerWidth < 640;
 
   // ── Chargement lazy
@@ -567,7 +571,6 @@ function InventoryModal({ discordId, nenColor, onClose }) {
         const s = row.slot;
         if (s != null && s >= 0 && s < INV_SLOTS) grid[s] = row;
       });
-      // Items sans slot → premier slot libre
       rows.forEach(row => {
         if (row.slot == null) {
           const free = grid.findIndex(v => v === null);
@@ -585,14 +588,13 @@ function InventoryModal({ discordId, nenColor, onClose }) {
       const updates = newSlots
         .map((row, idx) => row ? { ...row, slot: idx } : null)
         .filter(Boolean);
-      // Upsert de chaque row avec son nouveau slot
       await Promise.all(updates.map(row =>
         db.update('inventory', { slot: row.slot }, { id: `eq.${row.id}` })
       ));
     } finally { setSaving(false); }
   }, []);
 
-  // ── Drag & drop desktop
+  // ── Desktop: Drag & drop
   const handleDragStart = (e, idx) => {
     if (slots[idx] === null) { e.preventDefault(); return; }
     setDragSrc(idx);
@@ -603,7 +605,6 @@ function InventoryModal({ discordId, nenColor, onClose }) {
     e.preventDefault();
     if (dragSrc === null || dragSrc === idx) { setDragSrc(null); return; }
     const newSlots = [...slots];
-    // Swap
     const tmp = newSlots[idx];
     newSlots[idx] = newSlots[dragSrc];
     newSlots[dragSrc] = tmp;
@@ -612,32 +613,30 @@ function InventoryModal({ discordId, nenColor, onClose }) {
     saveSlots(newSlots);
   };
 
-  // ── Drag & drop mobile (touch)
-  const touchSrcRef = useRef(null);
-  const handleTouchStart = (e, idx) => {
-    if (slots[idx] === null) return;
-    touchSrcRef.current = idx;
-    // Long press → tooltip sur mobile
-    touchHoldRef.current = setTimeout(() => {
+  // ── Mobile: Tap-to-select → tap-to-swap
+  // 1er tap sur un item = le sélectionner (highlight)
+  // 2ème tap sur n'importe quel slot = swap + désélection
+  // Tap sur le slot déjà sélectionné = ouvrir le drawer de description
+  const handleMobileTap = (idx) => {
+    if (selectedIdx === null) {
+      // Rien de sélectionné
+      if (slots[idx] === null) return; // slot vide → rien
+      setSelectedIdx(idx); // sélectionner
+    } else if (selectedIdx === idx) {
+      // Re-tap sur le slot sélectionné → ouvrir fiche
       const item = slots[idx]?.items;
-      if (item) {
-        const rect = e.target.getBoundingClientRect();
-        setTooltip({ item, row: slots[idx], x: rect.left, y: rect.top });
-      }
-    }, 500);
-  };
-  const handleTouchEnd = (e, idx) => {
-    clearTimeout(touchHoldRef.current);
-    if (touchSrcRef.current === null) return;
-    const src = touchSrcRef.current;
-    touchSrcRef.current = null;
-    if (src === idx) return;
-    const newSlots = [...slots];
-    const tmp = newSlots[idx];
-    newSlots[idx] = newSlots[src];
-    newSlots[src] = tmp;
-    setSlots(newSlots);
-    saveSlots(newSlots);
+      if (item) setItemDrawer({ item, row: slots[idx] });
+      setSelectedIdx(null);
+    } else {
+      // Tap sur un autre slot → swap (même si vide, c'est un déplacement)
+      const newSlots = [...slots];
+      const tmp = newSlots[idx];
+      newSlots[idx] = newSlots[selectedIdx];
+      newSlots[selectedIdx] = tmp;
+      setSlots(newSlots);
+      setSelectedIdx(null);
+      saveSlots(newSlots);
+    }
   };
 
   const gridCols = isMobile ? 5 : 6;
@@ -649,7 +648,12 @@ function InventoryModal({ discordId, nenColor, onClose }) {
     <>
       {/* Backdrop */}
       <div
-        onClick={() => { setTooltip(null); onClose(); }}
+        onClick={() => {
+          setTooltip(null);
+          setSelectedIdx(null);
+          setItemDrawer(null);
+          onClose();
+        }}
         style={{
           position: 'fixed', inset: 0, zIndex: 150,
           background: 'rgba(0,0,0,0.65)',
@@ -658,7 +662,7 @@ function InventoryModal({ discordId, nenColor, onClose }) {
         }}
       />
 
-      {/* Drawer panel — slide up from bottom, full width */}
+      {/* Drawer panel */}
       <div
         style={{
           position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 151,
@@ -688,6 +692,21 @@ function InventoryModal({ discordId, nenColor, onClose }) {
           </div>
         </div>
 
+        {/* Mobile hint */}
+        {isMobile && !itemDrawer && (
+          <div style={{ padding: '6px 16px', flexShrink: 0, borderBottom: '1px solid #0d1a25' }}>
+            {selectedIdx !== null ? (
+              <span style={{ fontSize: 10, color: nenColor, fontFamily: 'Oswald, sans-serif', letterSpacing: 1 }}>
+                ◈ SÉLECTIONNÉ — TAP UN SLOT POUR DÉPLACER
+              </span>
+            ) : (
+              <span style={{ fontSize: 10, color: '#2a4055', fontFamily: 'Oswald, sans-serif', letterSpacing: 1 }}>
+                TAP = SÉLECTIONNER · TAP ×2 = FICHE
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Grille */}
         {invRows === null ? (
           <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
@@ -707,34 +726,50 @@ function InventoryModal({ discordId, nenColor, onClose }) {
                 const item = row?.items;
                 const rColor = item ? rarityColor(item.rarity) : '#1a2535';
                 const isEmpty = !item;
+                const isSelected = isMobile && selectedIdx === idx;
+                const isSwapTarget = isMobile && selectedIdx !== null && selectedIdx !== idx;
+
                 return (
                   <div
                     key={idx}
                     className="inv-slot"
-                    draggable={!isEmpty}
-                    onDragStart={e => handleDragStart(e, idx)}
-                    onDragOver={handleDragOver}
-                    onDrop={e => handleDrop(e, idx)}
-                    onDragEnter={e => { if (!isEmpty || slots[dragSrc]) e.currentTarget.classList.add('inv-slot-drag-over'); }}
-                    onDragLeave={e => e.currentTarget.classList.remove('inv-slot-drag-over')}
-                    onDragEnd={() => { setDragSrc(null); document.querySelectorAll('.inv-slot-drag-over').forEach(el => el.classList.remove('inv-slot-drag-over')); }}
-                    onTouchStart={e => handleTouchStart(e, idx)}
-                    onTouchEnd={e => handleTouchEnd(e, idx)}
-                    onMouseEnter={e => {
-                      if (!item || isMobile) return;
+                    // Desktop only
+                    draggable={!isEmpty && !isMobile}
+                    onDragStart={!isMobile ? e => handleDragStart(e, idx) : undefined}
+                    onDragOver={!isMobile ? handleDragOver : undefined}
+                    onDrop={!isMobile ? e => handleDrop(e, idx) : undefined}
+                    onDragEnter={!isMobile ? e => { if (!isEmpty || slots[dragSrc]) e.currentTarget.classList.add('inv-slot-drag-over'); } : undefined}
+                    onDragLeave={!isMobile ? e => e.currentTarget.classList.remove('inv-slot-drag-over') : undefined}
+                    onDragEnd={!isMobile ? () => { setDragSrc(null); document.querySelectorAll('.inv-slot-drag-over').forEach(el => el.classList.remove('inv-slot-drag-over')); } : undefined}
+                    // Desktop tooltip
+                    onMouseEnter={!isMobile ? e => {
+                      if (!item) return;
                       setTooltip({ item, row, x: e.currentTarget.getBoundingClientRect().right + 8, y: e.currentTarget.getBoundingClientRect().top });
-                    }}
-                    onMouseLeave={() => { if (!isMobile) setTooltip(null); }}
+                    } : undefined}
+                    onMouseLeave={!isMobile ? () => setTooltip(null) : undefined}
+                    // Mobile tap
+                    onClick={isMobile ? () => handleMobileTap(idx) : undefined}
                     style={{
                       width: slotSize, height: slotSize,
-                      border: `1px solid ${isEmpty ? '#1a2535' : rColor + '55'}`,
+                      border: isSelected
+                        ? `2px solid ${nenColor}`
+                        : `1px solid ${isEmpty ? '#1a2535' : rColor + '55'}`,
                       borderRadius: 4,
-                      background: isEmpty ? '#080f18' : rColor + '0d',
+                      background: isSelected
+                        ? nenColor + '18'
+                        : isSwapTarget && !isEmpty
+                          ? rColor + '20'
+                          : isEmpty ? '#080f18' : rColor + '0d',
+                      boxShadow: isSelected ? `0 0 10px ${nenColor}40` : 'none',
                       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                      cursor: isEmpty ? 'default' : 'grab',
+                      cursor: isMobile ? (isEmpty && selectedIdx === null ? 'default' : 'pointer') : (isEmpty ? 'default' : 'grab'),
                       position: 'relative',
                       userSelect: 'none',
                       WebkitUserSelect: 'none',
+                      transition: 'border 0.1s, background 0.1s, box-shadow 0.1s',
+                      // Pulse ring on swap targets (mobile)
+                      outline: isSwapTarget ? `1px dashed ${nenColor}40` : 'none',
+                      outlineOffset: 2,
                     }}>
                     {item && (
                       <>
@@ -763,13 +798,13 @@ function InventoryModal({ discordId, nenColor, onClose }) {
           </div>
         )}
 
-        {/* Tooltip item */}
-        {tooltip && (
+        {/* ── Desktop tooltip */}
+        {!isMobile && tooltip && (
           <div
             style={{
               position: 'fixed',
               top: Math.max(8, Math.min(tooltip.y, window.innerHeight - 180)),
-              left: Math.max(8, Math.min(isMobile ? window.innerWidth / 2 - 110 : tooltip.x, window.innerWidth - 230)),
+              left: Math.max(8, Math.min(tooltip.x, window.innerWidth - 230)),
               width: 220,
               background: '#0a1520',
               border: `1px solid ${rarityColor(tooltip.item.rarity)}60`,
@@ -791,12 +826,46 @@ function InventoryModal({ discordId, nenColor, onClose }) {
             {tooltip.row?.quantity > 1 && (
               <div style={{ marginTop: 6, fontSize: 10, color: '#4a7090', fontFamily: 'Oswald, sans-serif' }}>Quantité : {tooltip.row.quantity}</div>
             )}
-            {isMobile && (
-              <button onClick={() => setTooltip(null)}
-                style={{ marginTop: 8, background: 'none', border: '1px solid #1e2d3d', borderRadius: 3, color: '#4a7090', fontSize: 10, cursor: 'pointer', padding: '3px 8px', fontFamily: 'Oswald, sans-serif', letterSpacing: 1, pointerEvents: 'all' }}>
-                FERMER
+          </div>
+        )}
+
+        {/* ── Mobile: Item description drawer (collée en bas du panel) */}
+        {isMobile && itemDrawer && (
+          <div
+            style={{
+              flexShrink: 0,
+              borderTop: `1px solid ${rarityColor(itemDrawer.item.rarity)}40`,
+              background: `linear-gradient(180deg, #0a1520 0%, #060e18 100%)`,
+              padding: '12px 16px 16px',
+              animation: 'slideUp 0.2s ease forwards',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 28 }}>
+                  {isValidUrl(itemDrawer.item.icon)
+                    ? <img src={proxyImg(itemDrawer.item.icon)} alt={itemDrawer.item.name} style={{ width: 32, height: 32, objectFit: 'contain', display: 'block' }} />
+                    : itemDrawer.item.icon}
+                </span>
+                <div>
+                  <div style={{ fontFamily: 'Oswald, sans-serif', fontSize: 14, color: '#e8f4ff', letterSpacing: 1 }}>{itemDrawer.item.name}</div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 2 }}>
+                    <span style={{ fontSize: 10, color: rarityColor(itemDrawer.item.rarity), fontFamily: 'Oswald, sans-serif', letterSpacing: 1 }}>{itemDrawer.item.rarity?.toUpperCase()}</span>
+                    {itemDrawer.item.type && <span style={{ fontSize: 10, color: '#2a4a5a', fontFamily: 'Rajdhani, sans-serif', letterSpacing: 1, textTransform: 'uppercase' }}>· {itemDrawer.item.type}</span>}
+                    {itemDrawer.row?.quantity > 1 && <span style={{ fontSize: 10, color: '#4a7090', fontFamily: 'Oswald, sans-serif' }}>×{itemDrawer.row.quantity}</span>}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setItemDrawer(null)}
+                style={{ background: 'none', border: '1px solid #1e2d3d', borderRadius: 4, color: '#4a7090', cursor: 'pointer', fontSize: 14, width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                ✕
               </button>
-            )}
+            </div>
+            <div style={{ fontSize: 12, color: '#8aa0b8', fontFamily: 'Rajdhani, sans-serif', lineHeight: 1.65 }}>
+              {itemDrawer.item.description || 'Aucune description.'}
+            </div>
           </div>
         )}
       </div>
