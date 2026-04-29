@@ -20,6 +20,7 @@ styleEl.textContent = `
   @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
   @keyframes shimmer { 0% { background-position: -200% center; } 100% { background-position: 200% center; } }
   @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes slideUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
   .ac-tab { transition: all 0.2s ease; position: relative; }
   .ac-tab::after { content:''; position:absolute; bottom:-1px; left:0; right:0; height:2px; background:transparent; transition: background 0.2s; }
   .ac-tab.active::after { background: var(--accent); }
@@ -36,6 +37,9 @@ styleEl.textContent = `
     grid-template-rows: 1fr;
   }
   .tech-expand > div { overflow: hidden; }
+  .inv-slot-drag-over { outline: 2px solid var(--accent) !important; background: rgba(255,255,255,0.07) !important; }
+  .inv-slot { transition: background 0.15s, outline 0.15s; }
+  .shop-item { animation: slideUp 0.25s ease forwards; }
 `;
 document.head.appendChild(styleEl);
 
@@ -71,12 +75,21 @@ const db = {
     if (!res.ok) throw new Error(json.error || 'update error');
     return json.data;
   },
+  async delete(table, filters = {}) {
+    const res = await fetch('/api/supabase', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete', table, filters }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'delete error');
+    return json.data;
+  },
 };
 
 // ─── Constantes ────────────────────────────────────────────────────────
 const LEVEL_CAP = 250;
 const DAILY_XP_CAP = 20;
-// FIX: déplacé hors de StatRow pour éviter la redéfinition à chaque render
 const STAT_MAX = 1200;
 
 function xpRequired(level, limitbreak = false) {
@@ -132,6 +145,18 @@ const NEN_ABILITY_LIST = [
   { key: 'gyo', label: 'GYO' },
 ];
 
+// ─── Rareté ────────────────────────────────────────────────────────────
+const RARITY_COLORS = {
+  Commun:      '#8aa0b8',
+  Inhabituel:  '#2dc653',
+  Rare:        '#4cc9f0',
+  Épique:      '#9b5de5',
+  Mythique:    '#f72585',
+  Légendaire:  '#ffd60a',
+};
+const RARITY_ORDER = ['Commun', 'Inhabituel', 'Rare', 'Épique', 'Mythique', 'Légendaire'];
+const INV_SLOTS = 30;
+
 // ─── Helpers ───────────────────────────────────────────────────────────
 const proxyImg = (url) => (url && url.trim()) ? `/api/image?url=${encodeURIComponent(url.trim())}` : '';
 const isValidUrl = (str) => {
@@ -169,6 +194,24 @@ async function fetchTechniques(discordId) {
   return Array.isArray(rows) ? rows : [];
 }
 
+// Charge l'inventaire + les items associés
+async function fetchInventory(discordId) {
+  const rows = await db.select('inventory', {
+    select: 'id,item_id,quantity,slot,items(id,name,icon,description,type,rarity)',
+    filters: { discord_id: `eq.${discordId}` },
+  });
+  return Array.isArray(rows) ? rows : [];
+}
+
+// Charge les items d'une boutique (location = channel_id)
+async function fetchShop(channelId) {
+  const rows = await db.select('shops', {
+    select: 'id,item_id,price,stock,items(id,name,icon,description,type,rarity)',
+    filters: { channel_id: `eq.${channelId}` },
+  });
+  return Array.isArray(rows) ? rows : [];
+}
+
 // ─── Radar Chart ───────────────────────────────────────────────────────
 function RadarChart({ labels, values, color, title }) {
   const containerRef = useRef(null);
@@ -190,7 +233,6 @@ function RadarChart({ labels, values, color, title }) {
   const angle = useCallback((i) => (Math.PI * 2 * i) / n - Math.PI / 2, [n]);
   const maxVal = Math.max(...values, 1);
 
-  // FIX: ajout de cx, cy, r, levels dans les dépendances
   const gridPolygons = useMemo(() =>
     Array.from({ length: levels }).map((_, lvl) =>
       Array.from({ length: n }).map((_, i) => {
@@ -264,7 +306,6 @@ function HatsuStar({ hatsu, nenType, pendingKey, pendingNext }) {
   const activeColor = NEN_COLORS[nenType] || '#7a8fa6';
   const pendingColor = '#ffd60a';
 
-  // FIX: ajout de cx, cy, r, levels dans les dépendances
   const gridPolygons = useMemo(() =>
     Array.from({ length: levels }).map((_, lvl) =>
       Array.from({ length: n }).map((_, i) => {
@@ -444,7 +485,6 @@ function useHoldAction(action, enabled, { initialDelay = 400, minInterval = 40, 
 }
 
 // ─── StatRow ───────────────────────────────────────────────────────────
-// FIX: STAT_MAX déplacé en constante globale (ligne ~46)
 function StatRow({ label, value, onInc, onDec, color, canInc, canDec, limitbreak }) {
   const limitRatio = STAT_LIMIT / STAT_MAX;
   const statPercentage = Math.min((value / STAT_MAX) * 100, 100);
@@ -494,6 +534,566 @@ function TabBar({ active, onChange }) {
   );
 }
 
+// ─── INVENTAIRE ────────────────────────────────────────────────────────
+function InventoryModal({ discordId, nenColor, onClose }) {
+  const [invRows, setInvRows] = useState(null); // null = pas chargé
+  const [slots, setSlots] = useState(Array(INV_SLOTS).fill(null)); // slot index → invRow | null
+  const [tooltip, setTooltip] = useState(null); // { item, x, y }
+  const [dragSrc, setDragSrc] = useState(null); // index slot source
+  const [saving, setSaving] = useState(false);
+  const touchHoldRef = useRef(null);
+  const isMobile = window.innerWidth < 640;
+
+  // ── Chargement lazy
+  useEffect(() => {
+    (async () => {
+      const rows = await fetchInventory(discordId);
+      setInvRows(rows);
+      const grid = Array(INV_SLOTS).fill(null);
+      rows.forEach(row => {
+        const s = row.slot;
+        if (s != null && s >= 0 && s < INV_SLOTS) grid[s] = row;
+      });
+      // Items sans slot → premier slot libre
+      rows.forEach(row => {
+        if (row.slot == null) {
+          const free = grid.findIndex(v => v === null);
+          if (free !== -1) grid[free] = { ...row, slot: free };
+        }
+      });
+      setSlots(grid);
+    })();
+  }, [discordId]);
+
+  // ── Sauvegarde des positions
+  const saveSlots = useCallback(async (newSlots) => {
+    setSaving(true);
+    try {
+      const updates = newSlots
+        .map((row, idx) => row ? { ...row, slot: idx } : null)
+        .filter(Boolean);
+      // Upsert de chaque row avec son nouveau slot
+      await Promise.all(updates.map(row =>
+        db.update('inventory', { slot: row.slot }, { id: `eq.${row.id}` })
+      ));
+    } finally { setSaving(false); }
+  }, []);
+
+  // ── Drag & drop desktop
+  const handleDragStart = (e, idx) => {
+    if (slots[idx] === null) { e.preventDefault(); return; }
+    setDragSrc(idx);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+  const handleDragOver = (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; };
+  const handleDrop = (e, idx) => {
+    e.preventDefault();
+    if (dragSrc === null || dragSrc === idx) { setDragSrc(null); return; }
+    const newSlots = [...slots];
+    // Swap
+    const tmp = newSlots[idx];
+    newSlots[idx] = newSlots[dragSrc];
+    newSlots[dragSrc] = tmp;
+    setSlots(newSlots);
+    setDragSrc(null);
+    saveSlots(newSlots);
+  };
+
+  // ── Drag & drop mobile (touch)
+  const touchSrcRef = useRef(null);
+  const handleTouchStart = (e, idx) => {
+    if (slots[idx] === null) return;
+    touchSrcRef.current = idx;
+    // Long press → tooltip sur mobile
+    touchHoldRef.current = setTimeout(() => {
+      const item = slots[idx]?.items;
+      if (item) {
+        const rect = e.target.getBoundingClientRect();
+        setTooltip({ item, row: slots[idx], x: rect.left, y: rect.top });
+      }
+    }, 500);
+  };
+  const handleTouchEnd = (e, idx) => {
+    clearTimeout(touchHoldRef.current);
+    if (touchSrcRef.current === null) return;
+    const src = touchSrcRef.current;
+    touchSrcRef.current = null;
+    if (src === idx) return;
+    const newSlots = [...slots];
+    const tmp = newSlots[idx];
+    newSlots[idx] = newSlots[src];
+    newSlots[src] = tmp;
+    setSlots(newSlots);
+    saveSlots(newSlots);
+  };
+
+  const gridCols = isMobile ? 5 : 6;
+  const slotSize = isMobile ? 52 : 58;
+
+  const rarityColor = (rarity) => RARITY_COLORS[rarity] || '#8aa0b8';
+
+  return (
+    <div style={S.modalBg} onClick={() => { setTooltip(null); onClose(); }}>
+      <div style={{ ...S.modal, maxWidth: 400, width: '94%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
+        onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <div style={{ fontFamily: 'Oswald, sans-serif', fontSize: 13, letterSpacing: 3, color: '#8aa0b8' }}>
+            ◈ INVENTAIRE
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {saving && <span style={{ fontSize: 9, color: '#4a7090', fontFamily: 'Oswald, sans-serif', letterSpacing: 1 }}>SAUVEGARDE...</span>}
+            <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#4a7090', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>✕</button>
+          </div>
+        </div>
+
+        {/* Grille */}
+        {invRows === null ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+            <svg width={32} height={32} viewBox="0 0 32 32" style={{ animation: 'spin 1.5s linear infinite' }}>
+              <polygon points="16,2 30,10 30,22 16,30 2,22 2,10" fill="none" stroke={nenColor} strokeWidth={1.5} />
+            </svg>
+          </div>
+        ) : (
+          <div style={{ overflowY: 'auto', flex: 1 }}>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: `repeat(${gridCols}, ${slotSize}px)`,
+              gap: 4,
+              justifyContent: 'center',
+              padding: '4px 0 8px',
+            }}>
+              {slots.map((row, idx) => {
+                const item = row?.items;
+                const rColor = item ? rarityColor(item.rarity) : '#1a2535';
+                const isEmpty = !item;
+                return (
+                  <div
+                    key={idx}
+                    className="inv-slot"
+                    draggable={!isEmpty}
+                    onDragStart={e => handleDragStart(e, idx)}
+                    onDragOver={handleDragOver}
+                    onDrop={e => handleDrop(e, idx)}
+                    onDragEnter={e => { if (!isEmpty || slots[dragSrc]) e.currentTarget.classList.add('inv-slot-drag-over'); }}
+                    onDragLeave={e => e.currentTarget.classList.remove('inv-slot-drag-over')}
+                    onDragEnd={() => { setDragSrc(null); document.querySelectorAll('.inv-slot-drag-over').forEach(el => el.classList.remove('inv-slot-drag-over')); }}
+                    onTouchStart={e => handleTouchStart(e, idx)}
+                    onTouchEnd={e => handleTouchEnd(e, idx)}
+                    onMouseEnter={e => {
+                      if (!item || isMobile) return;
+                      setTooltip({ item, row, x: e.currentTarget.getBoundingClientRect().right + 8, y: e.currentTarget.getBoundingClientRect().top });
+                    }}
+                    onMouseLeave={() => { if (!isMobile) setTooltip(null); }}
+                    style={{
+                      width: slotSize, height: slotSize,
+                      border: `1px solid ${isEmpty ? '#1a2535' : rColor + '55'}`,
+                      borderRadius: 4,
+                      background: isEmpty ? '#080f18' : rColor + '0d',
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                      cursor: isEmpty ? 'default' : 'grab',
+                      position: 'relative',
+                      userSelect: 'none',
+                      WebkitUserSelect: 'none',
+                    }}>
+                    {item && (
+                      <>
+                        {/* Indicateur de rareté (coin haut gauche) */}
+                        <div style={{ position: 'absolute', top: 2, left: 2, width: 5, height: 5, borderRadius: '50%', background: rColor, boxShadow: `0 0 4px ${rColor}` }} />
+                        {/* Icône */}
+                        <div style={{ fontSize: isMobile ? 22 : 26, lineHeight: 1, marginBottom: 2 }}>
+                          {isValidUrl(item.icon) ? (
+                            <img src={proxyImg(item.icon)} alt={item.name}
+                              style={{ width: isMobile ? 28 : 32, height: isMobile ? 28 : 32, objectFit: 'contain', display: 'block' }}
+                              onError={e => { e.target.replaceWith(Object.assign(document.createElement('span'), { textContent: '📦' })); }} />
+                          ) : item.icon}
+                        </div>
+                        {/* Quantité */}
+                        {row.quantity > 1 && (
+                          <div style={{ position: 'absolute', bottom: 2, right: 4, fontSize: 9, color: '#c8d8e8', fontFamily: 'Oswald, sans-serif', fontWeight: '700' }}>
+                            ×{row.quantity}
+                          </div>
+                        )}
+                      </>
+                    )}
+                    {/* Numéro de slot (discret) */}
+                    {isEmpty && (
+                      <div style={{ fontSize: 8, color: '#1e2d3d', fontFamily: 'Oswald, sans-serif' }}>{idx + 1}</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Tooltip item (mobile: click) */}
+        {tooltip && (
+          <div
+            style={{
+              position: 'fixed',
+              top: Math.max(8, Math.min(tooltip.y, window.innerHeight - 180)),
+              left: Math.max(8, Math.min(isMobile ? window.innerWidth / 2 - 110 : tooltip.x, window.innerWidth - 230)),
+              width: 220,
+              background: '#0a1520',
+              border: `1px solid ${rarityColor(tooltip.item.rarity)}60`,
+              borderRadius: 5,
+              padding: '12px 14px',
+              zIndex: 200,
+              pointerEvents: 'none',
+              boxShadow: `0 4px 24px ${rarityColor(tooltip.item.rarity)}30`,
+            }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <span style={{ fontSize: 22 }}>{isValidUrl(tooltip.item.icon) ? '📦' : tooltip.item.icon}</span>
+              <div>
+                <div style={{ fontFamily: 'Oswald, sans-serif', fontSize: 13, color: '#e8f4ff', letterSpacing: 1 }}>{tooltip.item.name}</div>
+                <div style={{ fontSize: 10, color: rarityColor(tooltip.item.rarity), fontFamily: 'Oswald, sans-serif', letterSpacing: 1 }}>{tooltip.item.rarity?.toUpperCase()}</div>
+              </div>
+            </div>
+            <div style={{ fontSize: 10, color: '#4a6a80', fontFamily: 'Rajdhani, sans-serif', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 }}>{tooltip.item.type}</div>
+            <div style={{ fontSize: 11, color: '#8aa0b8', fontFamily: 'Rajdhani, sans-serif', lineHeight: 1.6 }}>{tooltip.item.description || 'Aucune description.'}</div>
+            {tooltip.row?.quantity > 1 && (
+              <div style={{ marginTop: 6, fontSize: 10, color: '#4a7090', fontFamily: 'Oswald, sans-serif' }}>Quantité : {tooltip.row.quantity}</div>
+            )}
+            {isMobile && (
+              <button onClick={() => setTooltip(null)}
+                style={{ marginTop: 8, background: 'none', border: '1px solid #1e2d3d', borderRadius: 3, color: '#4a7090', fontSize: 10, cursor: 'pointer', padding: '3px 8px', fontFamily: 'Oswald, sans-serif', letterSpacing: 1, pointerEvents: 'all' }}>
+                FERMER
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── BOUTIQUE ──────────────────────────────────────────────────────────
+function ShopModal({ discordId, location, jenny, onClose, onPurchase }) {
+  const [shopRows, setShopRows] = useState(null);
+  const [buying, setBuying] = useState(null); // item_id en cours d'achat
+  const [feedback, setFeedback] = useState(null); // { type: 'ok'|'err', msg }
+
+  useEffect(() => {
+    (async () => {
+      const rows = await fetchShop(location);
+      setShopRows(rows);
+    })();
+  }, [location]);
+
+  const handleBuy = async (row) => {
+    if (buying) return;
+    const item = row.items;
+    if (row.stock === 0) return;
+    if (jenny < row.price) {
+      setFeedback({ type: 'err', msg: 'Pas assez de Jenny !' });
+      setTimeout(() => setFeedback(null), 2000);
+      return;
+    }
+    setBuying(row.item_id);
+    try {
+      // 1. Déduire le prix côté joueur
+      await db.update('players', { jenny: jenny - row.price }, { discord_id: `eq.${discordId}` });
+
+      // 2. Ajouter / incrémenter dans l'inventaire
+      const existing = await db.select('inventory', {
+        select: 'id,quantity,slot',
+        filters: { discord_id: `eq.${discordId}`, item_id: `eq.${row.item_id}` },
+      });
+      if (existing && existing.length > 0) {
+        await db.update('inventory', { quantity: existing[0].quantity + 1 }, { id: `eq.${existing[0].id}` });
+      } else {
+        await db.upsert('inventory', { discord_id: discordId, item_id: row.item_id, quantity: 1, slot: null }, { onConflict: 'discord_id,item_id' });
+      }
+
+      // 3. Décrémenter le stock (si pas illimité)
+      if (row.stock !== 999) {
+        await db.update('shops', { stock: row.stock - 1 }, { id: `eq.${row.id}` });
+        setShopRows(prev => prev.map(r => r.id === row.id ? { ...r, stock: r.stock - 1 } : r));
+      }
+
+      onPurchase(row.price, item.name);
+      setFeedback({ type: 'ok', msg: `${item.icon || '📦'} ${item.name} acheté !` });
+      setTimeout(() => setFeedback(null), 2500);
+    } catch (err) {
+      setFeedback({ type: 'err', msg: 'Erreur lors de l\'achat.' });
+      setTimeout(() => setFeedback(null), 2500);
+    } finally { setBuying(null); }
+  };
+
+  const rarityColor = (rarity) => RARITY_COLORS[rarity] || '#8aa0b8';
+
+  return (
+    <div style={S.modalBg} onClick={onClose}>
+      <div style={{ ...S.modal, maxWidth: 420, width: '94%', maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}
+        onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <div>
+            <div style={{ fontFamily: 'Oswald, sans-serif', fontSize: 13, letterSpacing: 3, color: '#8aa0b8' }}>◈ BOUTIQUE</div>
+            <div style={{ fontSize: 10, color: '#3a5060', fontFamily: 'Rajdhani, sans-serif', letterSpacing: 1, marginTop: 1 }}>{location}</div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ fontFamily: 'Oswald, sans-serif', fontSize: 14, color: '#ffd60a', fontWeight: '600' }}>
+              {jenny?.toLocaleString()} <span style={{ fontSize: 9, color: '#4a5a70' }}>JENNY</span>
+            </div>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#4a7090', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>✕</button>
+          </div>
+        </div>
+
+        {/* Feedback */}
+        {feedback && (
+          <div style={{
+            padding: '8px 12px', borderRadius: 3, marginBottom: 10, fontSize: 12, fontFamily: 'Oswald, sans-serif', letterSpacing: 1,
+            background: feedback.type === 'ok' ? '#2dc65318' : '#f7258518',
+            border: `1px solid ${feedback.type === 'ok' ? '#2dc65360' : '#f7258560'}`,
+            color: feedback.type === 'ok' ? '#2dc653' : '#f72585',
+          }}>{feedback.msg}</div>
+        )}
+
+        {/* Liste */}
+        {shopRows === null ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+            <svg width={32} height={32} viewBox="0 0 32 32" style={{ animation: 'spin 1.5s linear infinite' }}>
+              <polygon points="16,2 30,10 30,22 16,30 2,22 2,10" fill="none" stroke="#ffd60a" strokeWidth={1.5} />
+            </svg>
+          </div>
+        ) : shopRows.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px 0', color: '#2a3a4a', fontFamily: 'Oswald, sans-serif', fontSize: 11, letterSpacing: 3 }}>
+            BOUTIQUE VIDE
+          </div>
+        ) : (
+          <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {shopRows.map((row, i) => {
+              const item = row.items;
+              const rColor = rarityColor(item?.rarity);
+              const sold = row.stock === 0;
+              const unlimited = row.stock === 999;
+              const isBuying = buying === row.item_id;
+              return (
+                <div key={row.id} className="shop-item" style={{
+                  animationDelay: `${i * 0.05}s`,
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '10px 12px',
+                  border: `1px solid ${sold ? '#1a2535' : rColor + '40'}`,
+                  borderLeft: `3px solid ${sold ? '#1a2535' : rColor}`,
+                  borderRadius: 4,
+                  background: sold ? '#060f18' : rColor + '08',
+                  opacity: sold ? 0.55 : 1,
+                }}>
+                  {/* Icône */}
+                  <div style={{ fontSize: 28, flexShrink: 0, width: 40, textAlign: 'center' }}>
+                    {isValidUrl(item?.icon) ? (
+                      <img src={proxyImg(item.icon)} alt={item.name}
+                        style={{ width: 36, height: 36, objectFit: 'contain' }}
+                        onError={e => { e.target.replaceWith(Object.assign(document.createElement('span'), { textContent: '📦', style: 'font-size:28px' })); }} />
+                    ) : (item?.icon || '📦')}
+                  </div>
+
+                  {/* Infos */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                      <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 13, color: '#e8f4ff', letterSpacing: 1 }}>{item?.name}</span>
+                      <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 9, color: rColor, letterSpacing: 1, background: rColor + '18', border: `1px solid ${rColor}40`, padding: '1px 5px', borderRadius: 2 }}>{item?.rarity?.toUpperCase()}</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: '#4a6a80', fontFamily: 'Rajdhani, sans-serif', marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item?.description}</div>
+                    <div style={{ fontSize: 10, color: sold ? '#3a5060' : unlimited ? '#4a7090' : '#5a8090', fontFamily: 'Oswald, sans-serif', letterSpacing: 1 }}>
+                      {sold ? '✖ ÉPUISÉ' : unlimited ? '∞ EN STOCK' : `${row.stock} RESTANT${row.stock > 1 ? 'S' : ''}`}
+                    </div>
+                  </div>
+
+                  {/* Prix + bouton */}
+                  <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
+                    <div style={{ fontFamily: 'Oswald, sans-serif', fontSize: 15, color: '#ffd60a', fontWeight: '700' }}>
+                      {row.price.toLocaleString()}
+                      <span style={{ fontSize: 9, color: '#4a5a70', marginLeft: 3 }}>J</span>
+                    </div>
+                    <button
+                      disabled={sold || isBuying || jenny < row.price}
+                      onClick={() => handleBuy(row)}
+                      className="ac-btn"
+                      style={{
+                        ...S.acBtn,
+                        fontSize: 9,
+                        padding: '5px 10px',
+                        letterSpacing: 1,
+                        borderColor: sold || jenny < row.price ? '#1e2d3d' : '#ffd60a80',
+                        color: sold || jenny < row.price ? '#2a3a4a' : '#ffd60a',
+                        cursor: sold || jenny < row.price || isBuying ? 'default' : 'pointer',
+                        minWidth: 64,
+                      }}>
+                      {isBuying ? '...' : sold ? 'ÉPUISÉ' : jenny < row.price ? 'FONDS INS.' : 'ACHETER'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── STYLES ────────────────────────────────────────────────────────────
+const S = {
+  root: { minHeight: '100vh', background: '#060f18', color: '#e8f4ff', fontFamily: 'Rajdhani, sans-serif', position: 'relative', overflow: 'hidden' },
+  center: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#060f18' },
+  card: { padding: '14px 14px', background: '#0d1824', border: '1px solid #1a2d40', borderRadius: 4, display: 'flex', flexDirection: 'column' },
+  acBtn: { background: 'transparent', border: '1px solid', borderRadius: 3, padding: '8px 16px', cursor: 'pointer', fontFamily: 'Oswald, sans-serif', letterSpacing: 2, fontSize: 11, transition: 'all 0.15s' },
+  modalBg: { position: 'fixed', inset: 0, background: '#000000c0', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, backdropFilter: 'blur(6px)' },
+  modal: { background: '#0a1520', border: '1px solid #1e2d3d', borderRadius: 5, padding: '22px', width: '88%', maxWidth: 340, position: 'relative' },
+  input: { width: '100%', background: '#060f18', border: '1px solid', borderRadius: 3, padding: '9px 12px', color: '#e8f4ff', fontFamily: 'Rajdhani, sans-serif', fontSize: 13, boxSizing: 'border-box', outline: 'none' },
+};
+
+const T = {
+  sectionTitle: { fontFamily: 'Oswald, sans-serif', fontSize: 11, letterSpacing: 3, textTransform: 'uppercase', color: '#4a7090', marginBottom: 8 },
+  label: { display: 'block', fontFamily: 'Oswald, sans-serif', fontSize: 10, color: '#3a5060', letterSpacing: 2, marginBottom: 5, marginTop: 12, textTransform: 'uppercase' },
+  modalTitle: { fontFamily: 'Oswald, sans-serif', fontSize: 14, letterSpacing: 3, color: '#8aa0b8', marginBottom: 4 },
+};
+
+// ─── TechniquesTab ─────────────────────────────────────────────────────
+const RANK_COLORS = {
+  E: '#7a8fa6', D: '#4cc9f0', C: '#2dc653', B: '#ffd60a',
+  A: '#e85d04', S: '#f72585', SS: '#9b5de5', SSS: '#ff6644', Z: '#ffffff',
+};
+
+function TechniquesTab({ techniques, loading, nenColor }) {
+  const [openId, setOpenId] = useState(null);
+
+  if (loading) return (
+    <div style={{ color: '#2a3a4a', fontSize: 12, fontFamily: 'Oswald, sans-serif', letterSpacing: 2, textAlign: 'center', padding: 30 }}>
+      CHARGEMENT...
+    </div>
+  );
+
+  if (!techniques?.length) return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '50px 0', gap: 10 }}>
+      <svg width={40} height={40} viewBox="0 0 40 40" opacity={0.15}>
+        <polygon points="20,3 37,12 37,28 20,37 3,28 3,12" fill="none" stroke="#4a7090" strokeWidth={1.5} />
+        <polygon points="20,11 29,16 29,24 20,29 11,24 11,16" fill="none" stroke="#4a7090" strokeWidth={1} />
+      </svg>
+      <div style={{ color: '#2a3a4a', fontSize: 11, fontFamily: 'Oswald, sans-serif', letterSpacing: 3 }}>AUCUNE TECHNIQUE</div>
+      <div style={{ color: '#1e2d3d', fontSize: 10, fontFamily: 'Rajdhani, sans-serif', letterSpacing: 1, marginTop: 2 }}>
+        Utilisez /technique créer sur le bot
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {techniques.map(t => {
+        const types = Array.isArray(t.hatsu_types) ? t.hatsu_types : (t.hatsu_types ? t.hatsu_types.split(',') : []);
+        const rankColor = RANK_COLORS[t.rank] || '#7a8fa6';
+        const rankImg = RANK_IMAGES[t.rank];
+        const isOpen = openId === t.id;
+
+        return (
+          <div key={t.id} style={{
+            border: `1px solid ${isOpen ? rankColor + '60' : rankColor + '25'}`,
+            borderLeft: `3px solid ${rankColor}`,
+            borderRadius: 4,
+            background: '#0b1520',
+            overflow: 'hidden',
+            transition: 'border-color 0.25s',
+          }}>
+            <button onClick={() => setOpenId(isOpen ? null : t.id)} className="ac-btn"
+              style={{
+                width: '100%', background: 'none', border: 'none', cursor: 'pointer',
+                padding: '9px 10px', display: 'flex', alignItems: 'center', gap: 8,
+                textAlign: 'left',
+              }}>
+              {t.image_url
+                ? <img src={proxyImg(t.image_url)} alt={t.name}
+                    style={{ maxHeight: 48, flexShrink: 0, borderRadius: 3, display: 'block' }}
+                    onError={e => { e.target.style.display = 'none'; }} />
+                : <div style={{ width: 44, height: 44, flexShrink: 0, borderRadius: 3, background: '#060f18', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.15 }}>
+                    <svg width={18} height={18} viewBox="0 0 18 18">
+                      <polygon points="9,1 17,5 17,13 9,17 1,13 1,5" fill="none" stroke="#4a7090" strokeWidth={1} />
+                    </svg>
+                  </div>
+              }
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ fontFamily: 'Oswald, sans-serif', fontSize: 13, color: '#e8f4ff', letterSpacing: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {t.name}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, alignItems: 'center' }}>
+                  {types.map(type => {
+                    const tr = type.trim();
+                    const col = NEN_COLORS[tr] || '#7a8fa6';
+                    return (
+                      <span key={tr} style={{
+                        fontFamily: 'Oswald, sans-serif', fontSize: 8, letterSpacing: 0.8,
+                        color: col, background: col + '18', border: `1px solid ${col}40`,
+                        borderRadius: 2, padding: '1px 5px',
+                      }}>{tr.toUpperCase()}</span>
+                    );
+                  })}
+                  {t.nen_cost != null && (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 3,
+                      background: nenColor + '15', border: `1px solid ${nenColor}40`,
+                      borderRadius: 2, padding: '1px 5px',
+                    }}>
+                      <svg width={7} height={7} viewBox="0 0 10 10">
+                        <polygon points="5,0.5 9.5,3 9.5,7 5,9.5 0.5,7 0.5,3" fill="none" stroke={nenColor} strokeWidth={1.5} />
+                      </svg>
+                      <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 8, color: nenColor, letterSpacing: 1 }}>{t.nen_cost} NEN</span>
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                {rankImg
+                  ? <img src={rankImg} alt={t.rank} style={{ width: 16, height: 16 }} />
+                  : <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 11, color: rankColor, fontWeight: 700 }}>{t.rank}</span>}
+                <svg width={10} height={10} viewBox="0 0 10 10"
+                  style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.25s', opacity: 0.5 }}>
+                  <polyline points="2,3 5,7 8,3" fill="none" stroke="#8aa0b8" strokeWidth={1.5} strokeLinecap="round" />
+                </svg>
+              </div>
+            </button>
+
+            <div className={`tech-expand${isOpen ? ' open' : ''}`}>
+              <div>
+                <div style={{ borderTop: `1px solid ${rankColor}20`, padding: '10px 12px 12px' }}>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: 120 }}>
+                      {t.description
+                        ? <div style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 12, color: '#8aa0b8', lineHeight: 1.65, padding: '8px 10px', background: '#060f18', border: '1px solid #1a2d40', borderRadius: 3 }}>
+                            {t.description}
+                          </div>
+                        : <div style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 11, color: '#2a3a4a', fontStyle: 'italic' }}>Aucune description.</div>
+                      }
+                    </div>
+                    {t.image_url && (
+                      <img src={proxyImg(t.image_url)} alt={t.name}
+                        style={{ maxWidth: 160, maxHeight: 160, flexShrink: 0, borderRadius: 3, border: `1px solid ${rankColor}30`, display: 'block' }}
+                        onError={e => { e.target.style.display = 'none'; }} />
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Info Row ──────────────────────────────────────────────────────────
+function InfoRow({ icon, label, value, color }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #0d1824' }}>
+      <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 11, color: '#4a7090', letterSpacing: 2 }}>{icon} {label.toUpperCase()}</span>
+      <span style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 13, color: color || '#8aa0b8', fontWeight: '600' }}>{value}</span>
+    </div>
+  );
+}
+
 // ─── APP ───────────────────────────────────────────────────────────────
 export default function App() {
   const [profile, setProfile] = useState(null);
@@ -515,6 +1115,11 @@ export default function App() {
   const [techniquesLoading, setTechniquesLoading] = useState(false);
   const [dailyXp, setDailyXp] = useState(0);
   const [isWideScreen, setIsWideScreen] = useState(window.innerWidth >= 640);
+
+  // ── Nouveaux états
+  const [showInventory, setShowInventory] = useState(false);
+  const [showShop, setShowShop] = useState(false);
+  const [localJenny, setLocalJenny] = useState(0); // mis à jour après achat
 
   useEffect(() => {
     const handler = () => setIsWideScreen(window.innerWidth >= 640);
@@ -543,6 +1148,7 @@ export default function App() {
     setProfile(prev => ({ ...p, techniques: prev?.techniques ?? [] }));
     setLocalStats({ ...p.stats });
     setLocalReserve(p.nen_reserve ?? 0);
+    setLocalJenny(p.jenny ?? 0);
 
     const today = new Date().toISOString().slice(0, 10);
     const dailyRows = await db.select('rp_daily_xp', {
@@ -601,6 +1207,7 @@ export default function App() {
               setProfile(cached);
               setLocalStats({ ...(cached.stats ?? {}) });
               setLocalReserve(cached.nen_reserve ?? 0);
+              setLocalJenny(cached.jenny ?? 0);
               renderedFromCache = true;
               setLoading(false);
             }
@@ -625,6 +1232,11 @@ export default function App() {
     if (!cacheKey || !profile) return;
     safeSession.setItem(cacheKey, JSON.stringify(profile));
   }, [cacheKey, profile]);
+
+  // Sync localJenny avec profile
+  useEffect(() => {
+    if (profile?.jenny != null) setLocalJenny(profile.jenny);
+  }, [profile?.jenny]);
 
   const nenColor = profile ? (NEN_COLORS[profile.nen_type] || '#7a8fa6') : '#7a8fa6';
   const MIN_STAT = 1;
@@ -730,6 +1342,15 @@ export default function App() {
     void loadTechniques(discordId);
   };
 
+  // Callback appelé après un achat réussi
+  const handlePurchase = useCallback((price, itemName) => {
+    setLocalJenny(prev => prev - price);
+    setProfile(prev => prev ? { ...prev, jenny: (prev.jenny ?? 0) - price } : prev);
+  }, []);
+
+  // La boutique est visible si le joueur a une location qui correspond à un shop
+  const hasShop = !!(profile?.location && profile.location.trim());
+
   if (loading) return (
     <div style={{ ...S.center, background: '#060f18' }}>
       <svg width={60} height={60} viewBox="0 0 60 60" style={{ animation: 'spin 2s linear infinite' }}>
@@ -781,13 +1402,50 @@ export default function App() {
               </div>
               <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 11, color: '#4a7090', letterSpacing: 2 }}>HxH · GUILDE</span>
             </div>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {/* Jenny */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 13, color: '#ffd60a', fontWeight: '600' }}>
-                  {profile.jenny?.toLocaleString() ?? 0}
+                  {localJenny?.toLocaleString() ?? 0}
                 </span>
                 <span style={{ fontSize: 9, color: '#4a5a70', fontFamily: 'Oswald, sans-serif', letterSpacing: 1 }}>JENNY</span>
               </div>
+
+              {/* ── Bouton Inventaire */}
+              <button
+                onClick={() => setShowInventory(true)}
+                title="Inventaire"
+                style={{
+                  width: 30, height: 30, borderRadius: 4, border: `1px solid ${nenColor}40`,
+                  background: nenColor + '12', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 0.15s',
+                }}>
+                <svg width={14} height={14} viewBox="0 0 14 14" fill="none">
+                  <rect x="1" y="3" width="12" height="10" rx="1.5" stroke={nenColor} strokeWidth="1.2" />
+                  <rect x="4" y="1" width="6" height="3" rx="1" stroke={nenColor} strokeWidth="1.2" />
+                  <line x1="1" y1="7" x2="13" y2="7" stroke={nenColor} strokeWidth="1" strokeOpacity="0.5" />
+                </svg>
+              </button>
+
+              {/* ── Bouton Boutique (uniquement si location définie) */}
+              {hasShop && (
+                <button
+                  onClick={() => setShowShop(true)}
+                  title="Boutique"
+                  style={{
+                    width: 30, height: 30, borderRadius: 4, border: '1px solid #ffd60a40',
+                    background: '#ffd60a12', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'all 0.15s',
+                  }}>
+                  <svg width={14} height={14} viewBox="0 0 14 14" fill="none">
+                    <path d="M1 3h12l-1.5 6H2.5L1 3Z" stroke="#ffd60a" strokeWidth="1.2" strokeLinejoin="round" />
+                    <circle cx="4.5" cy="12" r="1" fill="#ffd60a" />
+                    <circle cx="9.5" cy="12" r="1" fill="#ffd60a" />
+                    <path d="M4 1h6" stroke="#ffd60a" strokeWidth="1.2" strokeLinecap="round" />
+                  </svg>
+                </button>
+              )}
             </div>
           </div>
 
@@ -808,7 +1466,6 @@ export default function App() {
                   <span style={{ fontSize: 18 }}>✏️</span>
                 </div>
               )}
-              {/* Corner accent */}
               <div style={{ position: 'absolute', top: 0, left: 0, width: 10, height: 10, borderTop: `2px solid ${nenColor}`, borderLeft: `2px solid ${nenColor}` }} />
               <div style={{ position: 'absolute', bottom: 0, right: 0, width: 10, height: 10, borderBottom: `2px solid ${nenColor}`, borderRight: `2px solid ${nenColor}` }} />
             </div>
@@ -824,10 +1481,8 @@ export default function App() {
                 </div>
                 <div style={{
                   fontFamily: 'Oswald, sans-serif',
-                  fontSize: 15,
-                  fontWeight: '700',
+                  fontSize: 15, fontWeight: '700', letterSpacing: 1,
                   color: (profile.reputation ?? 0) > 0 ? '#ffd60a' : (profile.reputation ?? 0) < 0 ? '#f72585' : '#4a7090',
-                  letterSpacing: 1,
                 }}>
                   {(profile.reputation ?? 0) > 0 ? '+' : ''}{profile.reputation ?? 0}
                 </div>
@@ -930,7 +1585,6 @@ export default function App() {
                           const rank = profile.hatsu_affinities?.[b.key] ?? 'E';
                           const blocked = rank === '✖' || rank === 'Z' || (profile.affinity_points ?? 0) <= 0 || savingAffinity;
                           const rankImg = RANK_IMAGES[rank];
-                          // FIX: bColor était déclaré mais jamais utilisé — supprimé
                           return (
                             <button key={b.key} disabled={blocked} onClick={() => upgradeAffinity(b.key)} className="ac-btn"
                               style={{ background: '#0d1824', border: `1px solid ${blocked ? '#1a2535' : nenColor + '50'}`, borderRadius: 3, padding: '8px 10px', cursor: blocked ? 'default' : 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontFamily: 'Oswald, sans-serif', fontSize: 11, letterSpacing: 1, color: blocked ? '#2a3a4a' : nenColor, transition: 'all 0.15s' }}>
@@ -970,7 +1624,6 @@ export default function App() {
           {/* STATISTIQUES TAB */}
           {activeTab === 'STATISTIQUES' && (
             <div>
-              {/* Points bar */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: '#0d1824', border: '1px solid #1a2d40', borderRadius: 4, marginBottom: 12 }}>
                 <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 11, color: '#4a7090', letterSpacing: 2 }}>POINTS DISPONIBLES</span>
                 <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 20, fontWeight: '700', color: pointsLeft > 0 ? '#ffd60a' : '#2a3a4a' }}>
@@ -1017,6 +1670,26 @@ export default function App() {
           )}
         </div>
       </div>
+
+      {/* ── MODAL INVENTAIRE */}
+      {showInventory && (
+        <InventoryModal
+          discordId={discordId}
+          nenColor={nenColor}
+          onClose={() => setShowInventory(false)}
+        />
+      )}
+
+      {/* ── MODAL BOUTIQUE */}
+      {showShop && (
+        <ShopModal
+          discordId={discordId}
+          location={profile.location}
+          jenny={localJenny}
+          onClose={() => setShowShop(false)}
+          onPurchase={handlePurchase}
+        />
+      )}
 
       {/* MODAL PERSONNAGE */}
       {editing && (
@@ -1066,168 +1739,3 @@ export default function App() {
     </div>
   );
 }
-
-// ─── Techniques Tab ────────────────────────────────────────────────────
-const RANK_COLORS = {
-  E: '#7a8fa6', D: '#4cc9f0', C: '#2dc653', B: '#ffd60a',
-  A: '#e85d04', S: '#f72585', SS: '#9b5de5', SSS: '#ff6644', Z: '#ffffff',
-};
-
-function TechniquesTab({ techniques, loading, nenColor }) {
-  const [openId, setOpenId] = useState(null);
-
-  if (loading) return (
-    <div style={{ color: '#2a3a4a', fontSize: 12, fontFamily: 'Oswald, sans-serif', letterSpacing: 2, textAlign: 'center', padding: 30 }}>
-      CHARGEMENT...
-    </div>
-  );
-
-  if (!techniques?.length) return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '50px 0', gap: 10 }}>
-      <svg width={40} height={40} viewBox="0 0 40 40" opacity={0.15}>
-        <polygon points="20,3 37,12 37,28 20,37 3,28 3,12" fill="none" stroke="#4a7090" strokeWidth={1.5} />
-        <polygon points="20,11 29,16 29,24 20,29 11,24 11,16" fill="none" stroke="#4a7090" strokeWidth={1} />
-      </svg>
-      <div style={{ color: '#2a3a4a', fontSize: 11, fontFamily: 'Oswald, sans-serif', letterSpacing: 3 }}>AUCUNE TECHNIQUE</div>
-      <div style={{ color: '#1e2d3d', fontSize: 10, fontFamily: 'Rajdhani, sans-serif', letterSpacing: 1, marginTop: 2 }}>
-        Utilisez /technique créer sur le bot
-      </div>
-    </div>
-  );
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {techniques.map(t => {
-        const types     = Array.isArray(t.hatsu_types) ? t.hatsu_types : (t.hatsu_types ? t.hatsu_types.split(',') : []);
-        const rankColor = RANK_COLORS[t.rank] || '#7a8fa6';
-        const rankImg   = RANK_IMAGES[t.rank];
-        const isOpen    = openId === t.id;
-
-        return (
-          <div key={t.id} style={{
-            border: `1px solid ${isOpen ? rankColor + '60' : rankColor + '25'}`,
-            borderLeft: `3px solid ${rankColor}`,
-            borderRadius: 4,
-            background: '#0b1520',
-            overflow: 'hidden',
-            transition: 'border-color 0.25s',
-          }}>
-            {/* ── Header cliquable ─────────────────────── */}
-            <button onClick={() => setOpenId(isOpen ? null : t.id)} className="ac-btn"
-              style={{
-                width: '100%', background: 'none', border: 'none', cursor: 'pointer',
-                padding: '9px 10px', display: 'flex', alignItems: 'center', gap: 8,
-                textAlign: 'left',
-              }}>
-
-              {/* Vignette gif compacte */}
-              {t.image_url
-                ? <img src={proxyImg(t.image_url)} alt={t.name}
-                    style={{ maxHeight: 48, flexShrink: 0, borderRadius: 3, display: 'block' }}
-                    onError={e => { e.target.style.display = 'none'; }} />
-                : <div style={{ width: 44, height: 44, flexShrink: 0, borderRadius: 3, background: '#060f18', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.15 }}>
-                    <svg width={18} height={18} viewBox="0 0 18 18">
-                      <polygon points="9,1 17,5 17,13 9,17 1,13 1,5" fill="none" stroke="#4a7090" strokeWidth={1} />
-                    </svg>
-                  </div>
-              }
-
-              {/* Nom + types + coût nen */}
-              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <div style={{ fontFamily: 'Oswald, sans-serif', fontSize: 13, color: '#e8f4ff', letterSpacing: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {t.name}
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, alignItems: 'center' }}>
-                  {types.map(type => {
-                    const tr = type.trim();
-                    const col = NEN_COLORS[tr] || '#7a8fa6';
-                    return (
-                      <span key={tr} style={{
-                        fontFamily: 'Oswald, sans-serif', fontSize: 8, letterSpacing: 0.8,
-                        color: col, background: col + '18', border: `1px solid ${col}40`,
-                        borderRadius: 2, padding: '1px 5px',
-                      }}>{tr.toUpperCase()}</span>
-                    );
-                  })}
-                  {t.nen_cost != null && (
-                    <span style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 3,
-                      background: nenColor + '15', border: `1px solid ${nenColor}40`,
-                      borderRadius: 2, padding: '1px 5px',
-                    }}>
-                      <svg width={7} height={7} viewBox="0 0 10 10">
-                        <polygon points="5,0.5 9.5,3 9.5,7 5,9.5 0.5,7 0.5,3" fill="none" stroke={nenColor} strokeWidth={1.5} />
-                      </svg>
-                      <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 8, color: nenColor, letterSpacing: 1 }}>{t.nen_cost} NEN</span>
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Rang + chevron */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                {rankImg
-                  ? <img src={rankImg} alt={t.rank} style={{ width: 16, height: 16 }} />
-                  : <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 11, color: rankColor, fontWeight: 700 }}>{t.rank}</span>}
-                <svg width={10} height={10} viewBox="0 0 10 10"
-                  style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.25s', opacity: 0.5 }}>
-                  <polyline points="2,3 5,7 8,3" fill="none" stroke="#8aa0b8" strokeWidth={1.5} strokeLinecap="round" />
-                </svg>
-              </div>
-            </button>
-
-            {/* ── Panneau déroulant ─────────────────────── */}
-            <div className={`tech-expand${isOpen ? ' open' : ''}`}>
-              <div>
-                <div style={{ borderTop: `1px solid ${rankColor}20`, padding: '10px 12px 12px' }}>
-                  <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                    <div style={{ flex: 1, minWidth: 120 }}>
-                      {t.description
-                        ? <div style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 12, color: '#8aa0b8', lineHeight: 1.65, padding: '8px 10px', background: '#060f18', border: '1px solid #1a2d40', borderRadius: 3 }}>
-                            {t.description}
-                          </div>
-                        : <div style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 11, color: '#2a3a4a', fontStyle: 'italic' }}>Aucune description.</div>
-                      }
-                    </div>
-                    {t.image_url && (
-                      <img src={proxyImg(t.image_url)} alt={t.name}
-                        style={{ maxWidth: 160, maxHeight: 160, flexShrink: 0, borderRadius: 3, border: `1px solid ${rankColor}30`, display: 'block' }}
-                        onError={e => { e.target.style.display = 'none'; }} />
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ─── Info Row ──────────────────────────────────────────────────────────
-function InfoRow({ icon, label, value, color }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #0d1824' }}>
-      <span style={{ fontFamily: 'Oswald, sans-serif', fontSize: 11, color: '#4a7090', letterSpacing: 2 }}>{icon} {label.toUpperCase()}</span>
-      <span style={{ fontFamily: 'Rajdhani, sans-serif', fontSize: 13, color: color || '#8aa0b8', fontWeight: '600' }}>{value}</span>
-    </div>
-  );
-}
-
-// ─── STYLES ────────────────────────────────────────────────────────────
-const S = {
-  root: { minHeight: '100vh', background: '#060f18', color: '#e8f4ff', fontFamily: 'Rajdhani, sans-serif', position: 'relative', overflow: 'hidden' },
-  center: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#060f18' },
-  card: { padding: '14px 14px', background: '#0d1824', border: '1px solid #1a2d40', borderRadius: 4, display: 'flex', flexDirection: 'column' },
-  acBtn: { background: 'transparent', border: '1px solid', borderRadius: 3, padding: '8px 16px', cursor: 'pointer', fontFamily: 'Oswald, sans-serif', letterSpacing: 2, fontSize: 11, transition: 'all 0.15s' },
-  modalBg: { position: 'fixed', inset: 0, background: '#000000c0', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, backdropFilter: 'blur(6px)' },
-  modal: { background: '#0a1520', border: '1px solid #1e2d3d', borderRadius: 5, padding: '22px', width: '88%', maxWidth: 340, position: 'relative' },
-  input: { width: '100%', background: '#060f18', border: '1px solid', borderRadius: 3, padding: '9px 12px', color: '#e8f4ff', fontFamily: 'Rajdhani, sans-serif', fontSize: 13, boxSizing: 'border-box', outline: 'none' },
-};
-
-const T = {
-  sectionTitle: { fontFamily: 'Oswald, sans-serif', fontSize: 11, letterSpacing: 3, textTransform: 'uppercase', color: '#4a7090', marginBottom: 8 },
-  label: { display: 'block', fontFamily: 'Oswald, sans-serif', fontSize: 10, color: '#3a5060', letterSpacing: 2, marginBottom: 5, marginTop: 12, textTransform: 'uppercase' },
-  modalTitle: { fontFamily: 'Oswald, sans-serif', fontSize: 14, letterSpacing: 3, color: '#8aa0b8', marginBottom: 4 },
-};
