@@ -633,18 +633,45 @@ function InventoryModal({ discordId, nenColor, onClose }) {
   const rarityColor = (rarity) => RARITY_COLORS[rarity] || '#8aa0b8';
 
   return (
-    <div style={S.modalBg} onClick={() => { setTooltip(null); onClose(); }}>
-      <div style={{ ...S.modal, maxWidth: 400, width: '94%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
-        onClick={e => e.stopPropagation()}>
+    <>
+      {/* Backdrop */}
+      <div
+        onClick={() => { setTooltip(null); onClose(); }}
+        style={{
+          position: 'fixed', inset: 0, zIndex: 150,
+          background: 'rgba(0,0,0,0.65)',
+          backdropFilter: 'blur(3px)',
+          animation: 'fadeIn 0.2s ease forwards',
+        }}
+      />
+
+      {/* Drawer panel — slide up from bottom, full width */}
+      <div
+        style={{
+          position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 151,
+          background: 'linear-gradient(180deg, #0d1e2e 0%, #060f18 100%)',
+          borderTop: `2px solid ${nenColor}50`,
+          borderRadius: '14px 14px 0 0',
+          display: 'flex', flexDirection: 'column',
+          maxHeight: '88vh',
+          boxShadow: `0 -8px 40px rgba(0,0,0,0.7), 0 -2px 0 ${nenColor}30`,
+          animation: 'slideUp 0.28s cubic-bezier(0.32,0.72,0,1) forwards',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Handle bar */}
+        <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 10, paddingBottom: 4, flexShrink: 0 }}>
+          <div style={{ width: 40, height: 4, borderRadius: 2, background: '#2a3a4a' }} />
+        </div>
 
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-          <div style={{ fontFamily: 'Oswald, sans-serif', fontSize: 13, letterSpacing: 3, color: '#8aa0b8' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px 12px', flexShrink: 0, borderBottom: '1px solid #1a2d40' }}>
+          <div style={{ fontFamily: 'Oswald, sans-serif', fontSize: 14, letterSpacing: 3, color: '#8aa0b8' }}>
             ◈ INVENTAIRE
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {saving && <span style={{ fontSize: 9, color: '#4a7090', fontFamily: 'Oswald, sans-serif', letterSpacing: 1 }}>SAUVEGARDE...</span>}
-            <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#4a7090', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>✕</button>
+            <button onClick={onClose} style={{ background: 'none', border: '1px solid #1e2d3d', borderRadius: 4, color: '#4a7090', cursor: 'pointer', fontSize: 16, lineHeight: 1, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
           </div>
         </div>
 
@@ -656,13 +683,12 @@ function InventoryModal({ discordId, nenColor, onClose }) {
             </svg>
           </div>
         ) : (
-          <div style={{ overflowY: 'auto', flex: 1 }}>
+          <div style={{ overflowY: 'auto', flex: 1, padding: '12px 8px 20px' }}>
             <div style={{
               display: 'grid',
               gridTemplateColumns: `repeat(${gridCols}, ${slotSize}px)`,
-              gap: 4,
+              gap: 5,
               justifyContent: 'center',
-              padding: '4px 0 8px',
             }}>
               {slots.map((row, idx) => {
                 const item = row?.items;
@@ -699,9 +725,7 @@ function InventoryModal({ discordId, nenColor, onClose }) {
                     }}>
                     {item && (
                       <>
-                        {/* Indicateur de rareté (coin haut gauche) */}
                         <div style={{ position: 'absolute', top: 2, left: 2, width: 5, height: 5, borderRadius: '50%', background: rColor, boxShadow: `0 0 4px ${rColor}` }} />
-                        {/* Icône */}
                         <div style={{ fontSize: isMobile ? 22 : 26, lineHeight: 1, marginBottom: 2 }}>
                           {isValidUrl(item.icon) ? (
                             <img src={proxyImg(item.icon)} alt={item.name}
@@ -709,7 +733,6 @@ function InventoryModal({ discordId, nenColor, onClose }) {
                               onError={e => { e.target.replaceWith(Object.assign(document.createElement('span'), { textContent: '📦' })); }} />
                           ) : item.icon}
                         </div>
-                        {/* Quantité */}
                         {row.quantity > 1 && (
                           <div style={{ position: 'absolute', bottom: 2, right: 4, fontSize: 9, color: '#c8d8e8', fontFamily: 'Oswald, sans-serif', fontWeight: '700' }}>
                             ×{row.quantity}
@@ -717,7 +740,6 @@ function InventoryModal({ discordId, nenColor, onClose }) {
                         )}
                       </>
                     )}
-                    {/* Numéro de slot (discret) */}
                     {isEmpty && (
                       <div style={{ fontSize: 8, color: '#1e2d3d', fontFamily: 'Oswald, sans-serif' }}>{idx + 1}</div>
                     )}
@@ -728,7 +750,7 @@ function InventoryModal({ discordId, nenColor, onClose }) {
           </div>
         )}
 
-        {/* Tooltip item (mobile: click) */}
+        {/* Tooltip item */}
         {tooltip && (
           <div
             style={{
@@ -765,7 +787,7 @@ function InventoryModal({ discordId, nenColor, onClose }) {
           </div>
         )}
       </div>
-    </div>
+    </>
   );
 }
 
@@ -825,28 +847,44 @@ function ShopModal({ discordId, location, jenny, onClose, onPurchase }) {
   const rarityColor = (rarity) => RARITY_COLORS[rarity] || '#8aa0b8';
 
   return (
-    <div style={S.modalBg} onClick={onClose}>
-      <div style={{ ...S.modal, maxWidth: 420, width: '94%', maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}
-        onClick={e => e.stopPropagation()}>
+    <>
+      {/* Backdrop */}
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 150, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(3px)', animation: 'fadeIn 0.2s ease forwards' }} />
+
+      <div style={{
+        position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 151,
+        background: 'linear-gradient(180deg, #0d1e2e 0%, #060f18 100%)',
+        borderTop: '2px solid #ffd60a50',
+        borderRadius: '14px 14px 0 0',
+        display: 'flex', flexDirection: 'column',
+        maxHeight: '88vh',
+        boxShadow: '0 -8px 40px rgba(0,0,0,0.7), 0 -2px 0 #ffd60a30',
+        animation: 'slideUp 0.28s cubic-bezier(0.32,0.72,0,1) forwards',
+      }} onClick={e => e.stopPropagation()}>
+
+        {/* Handle bar */}
+        <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 10, paddingBottom: 4, flexShrink: 0 }}>
+          <div style={{ width: 40, height: 4, borderRadius: 2, background: '#2a3a4a' }} />
+        </div>
 
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px 12px', flexShrink: 0, borderBottom: '1px solid #1a2d40' }}>
           <div>
-            <div style={{ fontFamily: 'Oswald, sans-serif', fontSize: 13, letterSpacing: 3, color: '#8aa0b8' }}>◈ BOUTIQUE</div>
+            <div style={{ fontFamily: 'Oswald, sans-serif', fontSize: 14, letterSpacing: 3, color: '#8aa0b8' }}>◈ BOUTIQUE</div>
             <div style={{ fontSize: 10, color: '#3a5060', fontFamily: 'Rajdhani, sans-serif', letterSpacing: 1, marginTop: 1 }}>{location}</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ fontFamily: 'Oswald, sans-serif', fontSize: 14, color: '#ffd60a', fontWeight: '600' }}>
               {jenny?.toLocaleString()} <span style={{ fontSize: 9, color: '#4a5a70' }}>JENNY</span>
             </div>
-            <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#4a7090', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>✕</button>
+            <button onClick={onClose} style={{ background: 'none', border: '1px solid #1e2d3d', borderRadius: 4, color: '#4a7090', cursor: 'pointer', fontSize: 16, lineHeight: 1, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
           </div>
         </div>
 
         {/* Feedback */}
         {feedback && (
           <div style={{
-            padding: '8px 12px', borderRadius: 3, marginBottom: 10, fontSize: 12, fontFamily: 'Oswald, sans-serif', letterSpacing: 1,
+            margin: '10px 16px 0', padding: '8px 12px', borderRadius: 3, fontSize: 12, fontFamily: 'Oswald, sans-serif', letterSpacing: 1,
             background: feedback.type === 'ok' ? '#2dc65318' : '#f7258518',
             border: `1px solid ${feedback.type === 'ok' ? '#2dc65360' : '#f7258560'}`,
             color: feedback.type === 'ok' ? '#2dc653' : '#f72585',
@@ -865,7 +903,7 @@ function ShopModal({ discordId, location, jenny, onClose, onPurchase }) {
             BOUTIQUE VIDE
           </div>
         ) : (
-          <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 8, padding: '12px 16px 20px' }}>
             {shopRows.map((row, i) => {
               const item = row.items;
               const rColor = rarityColor(item?.rarity);
@@ -933,7 +971,7 @@ function ShopModal({ discordId, location, jenny, onClose, onPurchase }) {
           </div>
         )}
       </div>
-    </div>
+    </>
   );
 }
 
@@ -1390,7 +1428,7 @@ export default function App() {
       <div style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: '100%', minHeight: '100vh', paddingBottom: isWideScreen ? 20 : 10 }}>
 
         {/* ── HEADER BAND ── */}
-        <div style={{ background: 'linear-gradient(180deg, #0d1e2e 0%, #091420 100%)', borderBottom: '1px solid #1a2d40', padding: isWideScreen ? '12px 20px 0' : '8px 10px 0' }}>
+        <div style={{ background: 'linear-gradient(180deg, #0d1e2e 0%, #091420 100%)', borderBottom: '1px solid #1a2d40', padding: isWideScreen ? '12px 20px 0' : '44px 10px 0' }}>
 
           {/* Top info bar */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isWideScreen ? 12 : 8 }}>
