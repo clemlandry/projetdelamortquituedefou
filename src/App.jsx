@@ -923,7 +923,7 @@ function ShopModal({ discordId, location, jenny, onClose, onPurchase }) {
       }
 
       onPurchase(row.price, item.name);
-      setFeedback({ type: 'ok', msg: `${item.icon || '📦'} ${item.name} acheté !` });
+      setFeedback({ type: 'ok', msg: `${item.name} acheté !` });
       setTimeout(() => setFeedback(null), 2500);
     } catch (err) {
       setFeedback({ type: 'err', msg: 'Erreur lors de l\'achat.' });
